@@ -30,7 +30,10 @@ Sample Counts (weak entity, can easily measure more things if wanted without sch
 
 """
 
+import csv
 import sqlite3
+
+CSV_PATH = "cell-count.csv"
 
 CELL_POPULATIONS = ("b_cell", "cd8_t_cell", "cd4_t_cell", "nk_cell", "monocyte")
 
@@ -77,7 +80,68 @@ def initialize_db(db_name) -> None:
                 cursor.execute(statement)
             conn.commit()
     except Exception as e:
-        print(f"Error in database initialization, rolling back: {e}")
+        print(f"Error in database initialization, rolling back. {e}")
+    finally:
+        conn.close()
+
+
+# Reads the csv into the four tables. Subjects get collapsed on sbj_id before insert. Wipes existing rows so reruns are clean.
+def load_csv(db_name, csv_path=CSV_PATH) -> None:
+    projects = {}
+    subjects = {}
+    samples = []
+    counts = []
+
+    # read csv once and create all relevant table entries from a row instead of creating one table at a time
+    with open(csv_path, newline="") as f:
+        for row in csv.DictReader(f):
+            projects[row["project"]] = (row["project"],)
+
+            subjects[row["subject"]] = (
+                row["subject"],
+                row["project"],
+                int(row["age"]),
+                row["sex"],
+                row["condition"],
+                row["treatment"],
+                # healthy controls are untreated and have no response recorded
+                row["response"] or None,
+            )
+
+            samples.append(
+                (
+                    row["sample"],
+                    row["subject"],
+                    row["sample_type"],
+                    int(row["time_from_treatment_start"]),
+                )
+            )
+
+            for population in CELL_POPULATIONS:
+                counts.append((row["sample"], population, int(row[population])))
+
+    try:
+        with sqlite3.connect(f"{db_name}.db") as conn:
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA foreign_keys = ON;")
+
+            for table in ("sample_counts", "samples", "subjects", "projects"):
+                cursor.execute(f"DELETE FROM {table};")
+
+            cursor.executemany("INSERT INTO projects VALUES (?);", projects.values())
+            cursor.executemany(
+                "INSERT INTO subjects VALUES (?, ?, ?, ?, ?, ?, ?);", subjects.values()
+            )
+            cursor.executemany("INSERT INTO samples VALUES (?, ?, ?, ?);", samples)
+            cursor.executemany("INSERT INTO sample_counts VALUES (?, ?, ?);", counts)
+            conn.commit()
+
+            print(
+                f"Loaded {len(projects)} projects, {len(subjects)} subjects, "
+                f"{len(samples)} samples, {len(counts)} counts."
+            )
+    except Exception as e:
+        print(f"Error loading csv, rolling back. {e}")
     finally:
         conn.close()
 
@@ -86,3 +150,7 @@ if __name__ == "__main__":
 
     print("Initializing db...")
     initialize_db("teiknical")
+    print("Success!")
+    print("Filling db...")
+    load_csv("teiknical")
+    print("Success!")
