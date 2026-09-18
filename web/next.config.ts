@@ -7,7 +7,14 @@ const API_URL = process.env.API_URL ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
   async rewrites() {
-    return [{ source: "/api/:path*", destination: `${API_URL}/api/:path*` }];
+    return [
+      { source: "/api/:path*", destination: `${API_URL}/api/:path*` },
+      // FastAPI's generated docs, exposed on the same origin so they are
+      // reachable from the deployed dashboard and not just port 8000.
+      { source: "/docs", destination: `${API_URL}/docs` },
+      { source: "/redoc", destination: `${API_URL}/redoc` },
+      { source: "/openapi.json", destination: `${API_URL}/openapi.json` },
+    ];
   },
 };
 
