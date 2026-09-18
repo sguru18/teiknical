@@ -44,12 +44,14 @@ def get_summary(
         default=None, ge=1, description="Page size; omit to return every row"
     ),
     offset: int = Query(default=0, ge=0),
-) -> SummaryResponse:
+) -> (
+    SummaryResponse
+):  # FastAPI will serialize the response from this endpoint according to the definition in models.py, actually very cool
     """Part 2: relative frequency of each population within each sample."""
     sql, params = SUMMARY_SQL, []
 
     if sample is not None:
-        # Filter outside the window so total_count stays the full sample total.
+        # to return a single sample id instead of the full summary, ie. if we put search by sample id on the summary table
         sql = f"SELECT * FROM ({sql}) WHERE sample = ?"
         params.append(sample)
 
@@ -59,14 +61,13 @@ def get_summary(
 
     rows = [SummaryRow(**dict(r)) for r in conn.execute(sql, params)]
 
+    # get the other two fields required by the summary response model for frontend pagination, extremely cheap
     populations = [
         r["population"]
         for r in conn.execute(
             "SELECT DISTINCT population FROM sample_counts ORDER BY population"
         )
     ]
-    n_samples = conn.execute(
-        "SELECT COUNT(*) AS n FROM samples"
-    ).fetchone()["n"]
+    n_samples = conn.execute("SELECT COUNT(*) AS n FROM samples").fetchone()["n"]
 
     return SummaryResponse(rows=rows, n_samples=n_samples, populations=populations)

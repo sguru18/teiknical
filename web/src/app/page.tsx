@@ -10,6 +10,9 @@ export default function Home() {
   const [data, setData] = useState<SummaryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  // Held as a string so the field can be empty or mid-edit without the table
+  // jumping on every keystroke. Committed on blur or Enter.
+  const [pageInput, setPageInput] = useState("1");
 
   useEffect(() => {
     setError(null);
@@ -25,6 +28,27 @@ export default function Home() {
   const totalRows = data ? data.n_samples * data.populations.length : 0;
   const lastPage = Math.max(0, Math.ceil(totalRows / PAGE_SIZE) - 1);
 
+  // Shade alternate samples so the rows belonging to one sample read as a block.
+  // Keyed on sample rather than row index so it survives a sample having a
+  // different number of populations.
+  const shadedSamples = new Set(
+    [...new Set(data?.rows.map((row) => row.sample))].filter(
+      (_, index) => index % 2 === 1,
+    ),
+  );
+
+  function goToPage(next: number) {
+    const clamped = Math.min(Math.max(next, 0), lastPage);
+    setPage(clamped);
+    setPageInput(String(clamped + 1));
+  }
+
+  function commitPageInput() {
+    const parsed = Number.parseInt(pageInput, 10);
+    // Reject empty or non-numeric input by snapping back to the current page.
+    goToPage(Number.isNaN(parsed) ? page : parsed - 1);
+  }
+
   return (
     <main className="mx-auto max-w-4xl p-8 font-sans">
       <h1 className="text-2xl font-semibold">Cell population frequencies</h1>
@@ -38,16 +62,12 @@ export default function Home() {
         </p>
       )}
 
-      {!data && !error && <p className="mt-6 text-sm text-zinc-500">Loading…</p>}
+      {!data && !error && (
+        <p className="mt-6 text-sm text-zinc-500">Loading…</p>
+      )}
 
       {data && (
         <>
-          <p className="mt-6 text-sm text-zinc-600">
-            {data.n_samples.toLocaleString()} samples ×{" "}
-            {data.populations.length} populations ={" "}
-            {totalRows.toLocaleString()} rows
-          </p>
-
           <table className="mt-4 w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-zinc-300 text-left">
@@ -62,9 +82,13 @@ export default function Home() {
               {data.rows.map((row) => (
                 <tr
                   key={`${row.sample}-${row.population}`}
-                  className="border-b border-zinc-100"
+                  className={
+                    shadedSamples.has(row.sample) ? "bg-zinc-100" : undefined
+                  }
                 >
-                  <td className="py-1.5 pr-4 font-mono text-xs">{row.sample}</td>
+                  <td className="py-1.5 pr-4 font-mono text-xs">
+                    {row.sample}
+                  </td>
                   <td className="py-1.5 pr-4 tabular-nums">
                     {row.total_count.toLocaleString()}
                   </td>
@@ -83,17 +107,45 @@ export default function Home() {
           <div className="mt-4 flex items-center gap-3 text-sm">
             <button
               className="rounded border border-zinc-300 px-3 py-1 disabled:opacity-40"
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              onClick={() => goToPage(page - 1)}
               disabled={page === 0}
             >
               Previous
             </button>
-            <span className="text-zinc-600">
-              Page {page + 1} of {lastPage + 1}
+            <span className="flex items-center gap-2 text-zinc-600">
+              Page
+              <input
+                type="number"
+                min={1}
+                max={lastPage + 1}
+                value={pageInput}
+                onChange={(e) => setPageInput(e.target.value)}
+                onBlur={commitPageInput}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+                className="w-20 rounded border border-zinc-300 px-2 py-1 tabular-nums"
+                aria-label="Page number"
+              />
+              <button
+                // onMouseDown with preventDefault, because a plain onClick lands
+                // after the input's onBlur has already committed and disabled
+                // this button, so the click would be swallowed.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  commitPageInput();
+                }}
+                disabled={pageInput === String(page + 1)}
+                className="rounded border border-zinc-300 px-2 py-1 disabled:opacity-40"
+                aria-label="Go to page"
+              >
+                ✓
+              </button>
+              of {lastPage + 1}
             </span>
             <button
               className="rounded border border-zinc-300 px-3 py-1 disabled:opacity-40"
-              onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
+              onClick={() => goToPage(page + 1)}
               disabled={page >= lastPage}
             >
               Next

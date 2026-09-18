@@ -1,13 +1,20 @@
 """Response models for the analysis API.
 
-These double as the source of truth for the frontend: `openapi-typescript`
-turns the generated schema into TypeScript types, so a rename here surfaces
-as a compile error in the React app.
-
 `population` is typed as a plain `str` rather than an enum on purpose. The
 sample_counts table stores populations as rows, so adding a sixth cell type
 is an INSERT; hardcoding the five names here would reintroduce the schema
 coupling that design was meant to avoid.
+
+
+
+these let the server enforce data structure at runtime. data that comes out of the DB is checked against these models,
+and a server side error is raised if anything doesn't match, preventing client side crashes
+
+these also permit automatic generation of typescript types, so a rename from percentage to pct in the DB for whatever reason
+would make row.percentage become a compiler error in typescript, again preventing client side crash at runtime
+
+this is however somewhat problematic during frequent schema changes, kinda obviously.
+
 """
 
 from typing import Literal
@@ -74,7 +81,9 @@ class PopulationTest(BaseModel):
     median_difference: float = Field(description="responders minus non-responders")
     statistic: float
     p_value: float
-    p_value_adjusted: float = Field(description="Corrected across all populations tested")
+    p_value_adjusted: float = Field(
+        description="Corrected across all populations tested"
+    )
     significant: bool = Field(description="p_value_adjusted < alpha")
 
 

@@ -1,8 +1,10 @@
 """SQLite access for the analysis API.
 
-Read-only: the database is built once by `load_data.py` (`make pipeline`) and
-this process only queries it. A fresh connection per request keeps things
-thread-safe under uvicorn without needing `check_same_thread=False`.
+creates a new connection per request, ensuring thread safety for tools like uvicorn
+
+yield used so we can return cleanup, this function owns the connection lifecycle, instead of
+making the caller responsible for that
+
 """
 
 import os
@@ -26,7 +28,9 @@ def get_connection() -> Iterator[sqlite3.Connection]:
         )
 
     conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = (
+        sqlite3.Row
+    )  # makes each row a sqlite3.Row object, meaning we can access columns by name. this will allow easy conversion to a dict via keyword arg unpacking
     try:
         yield conn
     finally:
