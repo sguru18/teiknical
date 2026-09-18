@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { FadeIn } from "@/components/FadeIn";
 import { fetchJson, type SummaryResponse } from "@/lib/api";
 
 const PAGE_SIZE = 50;
@@ -60,9 +61,11 @@ export function FrequencySummary() {
       </p>
 
       {error && (
-        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </p>
+        <FadeIn>
+          <p className="mt-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </p>
+        </FadeIn>
       )}
 
       {!data && !error && (
@@ -70,7 +73,7 @@ export function FrequencySummary() {
       )}
 
       {data && (
-        <>
+        <FadeIn key={`${data.rows[0]?.sample ?? "empty"}-${data.rows.at(-1)?.sample ?? ""}`}>
           <table className="mt-6 w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-[#e5e0d9] text-left">
@@ -163,7 +166,7 @@ export function FrequencySummary() {
               Next
             </button>
           </div>
-        </>
+        </FadeIn>
       )}
     </div>
   );

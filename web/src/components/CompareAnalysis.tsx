@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-import { FrequencyBoxPlot } from "@/components/FrequencyBoxPlot";
+import { FrequencyBoxPlot, loadPlotly } from "@/components/FrequencyBoxPlot";
+import { FadeIn } from "@/components/FadeIn";
 import { Select } from "@/components/Select";
 import {
   fetchJson,
@@ -29,6 +30,9 @@ export function CompareAnalysis() {
   const [sampleType, setSampleType] = useState("PBMC");
 
   useEffect(() => {
+    // Kick off the Plotly chunk now, in parallel with /api/compare, instead of
+    // waiting until FrequencyBoxPlot mounts after the response arrives.
+    void loadPlotly();
     fetchJson<FilterOptions>("/api/filters").then(setOptions).catch(() => {});
   }, []);
 
@@ -72,11 +76,15 @@ export function CompareAnalysis() {
         Responders vs non-responders
       </h2>
       {/* min-h reserves the line so the page doesn't shift when data arrives */}
-      <p className="mt-1 min-h-[1.25rem] text-sm text-[#666]">
-        {data
-          ? `${data.filters.condition} · ${data.filters.treatment} · ${data.filters.sample_type} · ${data.n_subjects} subjects`
-          : null}
-      </p>
+      <div className="mt-1 min-h-[1.25rem] text-sm text-[#666]">
+        {data && !loading && (
+          <FadeIn
+            key={`${data.filters.condition}-${data.filters.treatment}-${data.filters.sample_type}-${data.n_subjects}`}
+          >
+            {`${data.filters.condition} · ${data.filters.treatment} · ${data.filters.sample_type} · ${data.n_subjects} subjects`}
+          </FadeIn>
+        )}
+      </div>
 
       <div className="mt-6 flex flex-wrap items-end gap-6">
         <Select
@@ -122,9 +130,11 @@ export function CompareAnalysis() {
       </div>
 
       {error && (
-        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </p>
+        <FadeIn>
+          <p className="mt-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </p>
+        </FadeIn>
       )}
 
       {/* Chart area is always reserved at full height so the page does not
@@ -139,7 +149,8 @@ export function CompareAnalysis() {
       </div>
 
       {data && (
-        <div
+        <FadeIn
+          key={`${data.filters.condition}-${data.filters.treatment}-${data.filters.sample_type}-${data.aggregation}`}
           className={
             loading ? "opacity-50 transition-opacity" : "transition-opacity"
           }
@@ -248,7 +259,7 @@ export function CompareAnalysis() {
               </p>
             </>
           )}
-        </div>
+        </FadeIn>
       )}
     </div>
   );

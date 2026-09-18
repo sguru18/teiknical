@@ -24,7 +24,7 @@ export default function Home() {
         <div className="flex items-center">
           {/* Wordmark — sits flush left, outside the tab buttons */}
           <span className="px-4 text-sm font-bold text-[#e5341a] shrink-0">
-            teiknical
+            Teiknical
           </span>
           {/* Thin separator between wordmark and tabs */}
           <div className="w-px h-5 bg-[#e5e0d9] shrink-0" />

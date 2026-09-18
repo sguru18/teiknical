@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Teiko · Deliverables",
+  title: "Teiknical",
   description: "Cell population frequency analysis dashboard",
 };
 

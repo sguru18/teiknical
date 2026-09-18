@@ -9,7 +9,7 @@ import type { FrequencyPoint } from "@/lib/api";
 type PlotlyModule = typeof import("plotly.js-dist-min");
 let plotlyPromise: Promise<PlotlyModule> | null = null;
 
-function loadPlotly() {
+export function loadPlotly() {
   plotlyPromise ??= import("plotly.js-dist-min");
   return plotlyPromise;
 }
@@ -75,12 +75,19 @@ export function FrequencyBoxPlot({ points }: { points: FrequencyPoint[] }) {
 
   return (
     <div className="relative h-[480px] w-full">
-      {!ready && (
-        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-[#f0ebe4] text-sm text-[#999]">
-          Loading…
-        </div>
-      )}
-      <div ref={container} className="h-full w-full" />
+      <div
+        className={`absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-[#f0ebe4] text-sm text-[#999] transition-opacity duration-500 ease-out ${
+          ready ? "pointer-events-none opacity-0" : "opacity-100"
+        }`}
+      >
+        Loading…
+      </div>
+      <div
+        ref={container}
+        className={`h-full w-full transition-opacity duration-500 ease-out ${
+          ready ? "opacity-100" : "opacity-0"
+        }`}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { FadeIn } from "@/components/FadeIn";
 import { Select } from "@/components/Select";
 import {
   fetchJson,
@@ -141,9 +142,11 @@ export function CohortBreakdown() {
       </div>
 
       {error && (
-        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </p>
+        <FadeIn>
+          <p className="mt-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </p>
+        </FadeIn>
       )}
 
       {!data && !error && (
@@ -151,7 +154,8 @@ export function CohortBreakdown() {
       )}
 
       {data && (
-        <div
+        <FadeIn
+          key={`${data.n_samples}-${data.n_subjects}-${data.sample_ids[0] ?? "none"}`}
           className={
             loading ? "opacity-50 transition-opacity" : "transition-opacity"
           }
@@ -207,7 +211,7 @@ export function CohortBreakdown() {
               </details>
             </>
           )}
-        </div>
+        </FadeIn>
       )}
     </div>
   );
