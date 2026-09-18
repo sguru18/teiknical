@@ -18,10 +18,11 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("summary");
+  const [warmCompare, setWarmCompare] = useState(false);
 
   useEffect(() => {
-    prefetchDefaults();
     void loadPlotly();
+    void prefetchDefaults().then(() => setWarmCompare(true));
   }, []);
 
   return (
@@ -64,16 +65,18 @@ export default function Home() {
         <div className={activeTab === "summary" ? undefined : "hidden"}>
           <FrequencySummary />
         </div>
-        <div
-          className={
-            activeTab === "compare"
-              ? undefined
-              : "invisible pointer-events-none absolute inset-x-8 top-8"
-          }
-          aria-hidden={activeTab !== "compare"}
-        >
-          <CompareAnalysis active={activeTab === "compare"} />
-        </div>
+        {warmCompare && (
+          <div
+            className={
+              activeTab === "compare"
+                ? undefined
+                : "invisible pointer-events-none absolute inset-x-8 top-8"
+            }
+            aria-hidden={activeTab !== "compare"}
+          >
+            <CompareAnalysis active={activeTab === "compare"} />
+          </div>
+        )}
         <div className={activeTab === "cohort" ? undefined : "hidden"}>
           <CohortBreakdown />
         </div>

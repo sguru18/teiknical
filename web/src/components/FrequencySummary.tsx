@@ -3,12 +3,21 @@
 import { useEffect, useState } from "react";
 
 import { FadeIn } from "@/components/FadeIn";
-import { cachedFetch, type SummaryResponse } from "@/lib/api";
+import {
+  cachedFetch,
+  peekCached,
+  SUMMARY_PAGE_SIZE,
+  type SummaryResponse,
+} from "@/lib/api";
 
-const PAGE_SIZE = 50;
+function summaryParams(page: number) {
+  return { limit: SUMMARY_PAGE_SIZE, offset: page * SUMMARY_PAGE_SIZE };
+}
 
 export function FrequencySummary() {
-  const [data, setData] = useState<SummaryResponse | null>(null);
+  const [data, setData] = useState<SummaryResponse | null>(
+    () => peekCached("/api/summary", summaryParams(0)) ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   // Held as a string so the field can be empty or mid-edit without the table
@@ -16,18 +25,39 @@ export function FrequencySummary() {
   const [pageInput, setPageInput] = useState("1");
 
   useEffect(() => {
-    setError(null);
-    cachedFetch<SummaryResponse>("/api/summary", {
-      limit: PAGE_SIZE,
-      offset: page * PAGE_SIZE,
-    })
-      .then(setData)
-      .catch((e: Error) => setError(e.message));
+    const cached = peekCached<SummaryResponse>(
+      "/api/summary",
+      summaryParams(page),
+    );
+    if (cached) {
+      setData(cached);
+      setError(null);
+    } else {
+      setError(null);
+    }
+
+    let cancelled = false;
+    cachedFetch<SummaryResponse>("/api/summary", summaryParams(page))
+      .then((next) => {
+        if (!cancelled) setData(next);
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setError(e.message);
+      });
+
+    void cachedFetch<SummaryResponse>("/api/summary", summaryParams(page + 1));
+    if (page > 0) {
+      void cachedFetch<SummaryResponse>("/api/summary", summaryParams(page - 1));
+    }
+
+    return () => {
+      cancelled = true;
+    };
   }, [page]);
 
   // Five rows per sample, so total rows is samples * populations.
   const totalRows = data ? data.n_samples * data.populations.length : 0;
-  const lastPage = Math.max(0, Math.ceil(totalRows / PAGE_SIZE) - 1);
+  const lastPage = Math.max(0, Math.ceil(totalRows / SUMMARY_PAGE_SIZE) - 1);
 
   // Shade alternate samples so the rows belonging to one sample read as a block.
   const shadedSamples = new Set(
@@ -73,7 +103,7 @@ export function FrequencySummary() {
       )}
 
       {data && (
-        <FadeIn key={`${data.rows[0]?.sample ?? "empty"}-${data.rows.at(-1)?.sample ?? ""}`}>
+        <FadeIn>
           <table className="mt-6 w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-[#e5e0d9] text-left">

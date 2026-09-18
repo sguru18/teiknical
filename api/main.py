@@ -67,18 +67,6 @@ def get_summary(
     """Part 2: relative frequency of each population within each sample."""
     sql, params = SUMMARY_SQL, []
 
-    if sample is not None:
-        # to return a single sample id instead of the full summary, ie. if we put search by sample id on the summary table
-        sql = f"SELECT * FROM ({sql}) WHERE sample = ?"
-        params.append(sample)
-
-    if limit is not None:
-        sql = f"{sql} LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
-
-    rows = [SummaryRow(**dict(r)) for r in conn.execute(sql, params)]
-
-    # get the other two fields required by the summary response model for frontend pagination, extremely cheap
     populations = [
         r["population"]
         for r in conn.execute(
@@ -86,6 +74,38 @@ def get_summary(
         )
     ]
     n_samples = conn.execute("SELECT COUNT(*) AS n FROM samples").fetchone()["n"]
+
+    if sample is not None:
+        sql = f"SELECT * FROM ({sql}) WHERE sample = ?"
+        params.append(sample)
+        if limit is not None:
+            sql = f"{sql} LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+    elif limit is not None:
+        # Page by sample first so the window function only runs on this page,
+        # not all 52,500 count rows. Five populations per sample, and the
+        # client always asks for a multiple of that, so row offset maps cleanly.
+        n_pops = max(len(populations), 1)
+        sql = """
+            WITH page AS (
+                SELECT sample_id FROM samples
+                ORDER BY sample_id
+                LIMIT ? OFFSET ?
+            )
+            SELECT
+                sc.sample_id AS sample,
+                sc.population,
+                sc.count,
+                SUM(sc.count) OVER (PARTITION BY sc.sample_id) AS total_count,
+                100.0 * sc.count / SUM(sc.count) OVER (PARTITION BY sc.sample_id)
+                    AS percentage
+            FROM sample_counts sc
+            JOIN page ON page.sample_id = sc.sample_id
+            ORDER BY sc.sample_id, sc.population
+        """
+        params = [(limit + n_pops - 1) // n_pops, offset // n_pops]
+
+    rows = [SummaryRow(**dict(r)) for r in conn.execute(sql, params)]
 
     return SummaryResponse(rows=rows, n_samples=n_samples, populations=populations)
 

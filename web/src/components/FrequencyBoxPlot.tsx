@@ -56,6 +56,7 @@ export function FrequencyBoxPlot({
           jitter: 0.5,
           pointpos: 0,
           hovertemplate: "%{y:.2f}%<extra></extra>",
+          showlegend: false,
         };
       });
 
@@ -64,16 +65,22 @@ export function FrequencyBoxPlot({
         traces,
         {
           boxmode: "group",
-          yaxis: { title: { text: "Relative frequency (%)" }, zeroline: false },
-          xaxis: { title: { text: "Population" } },
-          margin: { t: 20, r: 20, b: 60, l: 60 },
-          legend: { orientation: "h", y: -0.2 },
+          autosize: true,
+          showlegend: false,
+          // Tick labels only — legend and axis titles are HTML around this
+          // div, because Plotly draws them outside the plot and they either
+          // spill onto the page or get clipped by the 480px box.
+          xaxis: { automargin: false, tickfont: { size: 11 } },
+          yaxis: { automargin: false, zeroline: false, tickfont: { size: 11 } },
+          margin: { t: 8, r: 12, b: 48, l: 44 },
           font: { family: "var(--font-geist-sans), system-ui, sans-serif" },
           paper_bgcolor: "transparent",
           plot_bgcolor: "transparent",
         },
         { responsive: true, displayModeBar: false },
       ).then(() => {
+        if (cancelled || !container.current) return;
+        Plotly.Plots.resize(container.current);
         if (!cancelled) setReady(true);
       });
     });
@@ -86,7 +93,7 @@ export function FrequencyBoxPlot({
   }, [points]);
 
   return (
-    <div className="relative h-[480px] w-full">
+    <div className="relative flex h-[480px] w-full flex-col">
       <div
         className={`absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-[#f0ebe4] text-sm text-[#999] transition-opacity duration-500 ease-out ${
           ready ? "pointer-events-none opacity-0" : "opacity-100"
@@ -94,12 +101,42 @@ export function FrequencyBoxPlot({
       >
         Loading…
       </div>
+
       <div
-        ref={container}
-        className={`h-full w-full transition-opacity duration-500 ease-out ${
+        className={`flex min-h-0 flex-1 flex-col transition-opacity duration-500 ease-out ${
           ready ? "opacity-100" : "opacity-0"
         }`}
-      />
+      >
+        <div className="flex shrink-0 items-center justify-center gap-5 pb-1 text-sm text-[#333]">
+          <LegendSwatch color={COLORS.yes} label="Responder" />
+          <LegendSwatch color={COLORS.no} label="Non-responder" />
+        </div>
+
+        <div className="flex min-h-0 flex-1">
+          <div className="relative w-8 shrink-0">
+            <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 whitespace-nowrap text-xs text-[#555]">
+              Relative frequency (%)
+            </span>
+          </div>
+          <div ref={container} className="h-full min-w-0 flex-1" />
+        </div>
+
+        <p className="shrink-0 pb-1 text-center text-xs text-[#555]">
+          Population
+        </p>
+      </div>
     </div>
+  );
+}
+
+function LegendSwatch({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span
+        className="h-2.5 w-2.5 rounded-sm"
+        style={{ backgroundColor: color }}
+      />
+      {label}
+    </span>
   );
 }

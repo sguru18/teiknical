@@ -30,6 +30,16 @@ export const DEFAULT_COHORT_PARAMS = {
   time_from_treatment_start: 0,
 } as const;
 
+export const SUMMARY_PAGE_SIZE = 50;
+
+// Treated disease arms only. healthy/none is left to load on demand.
+export const PREFETCH_COMPARE_COMBOS = [
+  { condition: "melanoma", treatment: "miraclib" },
+  { condition: "melanoma", treatment: "phauximab" },
+  { condition: "carcinoma", treatment: "miraclib" },
+  { condition: "carcinoma", treatment: "phauximab" },
+] as const;
+
 function requestUrl(path: string, params: QueryParams = {}): string {
   const query = new URLSearchParams();
   for (const key of Object.keys(params).sort()) {
@@ -84,8 +94,30 @@ export function cachedFetch<T>(
   return promise;
 }
 
-export function prefetchDefaults(): void {
+export async function prefetchDefaults(): Promise<void> {
   void cachedFetch<FilterOptions>("/api/filters");
-  void cachedFetch<CompareResponse>("/api/compare", DEFAULT_COMPARE_PARAMS);
   void cachedFetch<CohortResponse>("/api/cohort", DEFAULT_COHORT_PARAMS);
+
+  const firstPage = cachedFetch<SummaryResponse>("/api/summary", {
+    limit: SUMMARY_PAGE_SIZE,
+    offset: 0,
+  });
+  void cachedFetch<SummaryResponse>("/api/summary", {
+    limit: SUMMARY_PAGE_SIZE,
+    offset: SUMMARY_PAGE_SIZE,
+  });
+
+  await firstPage;
+
+  // Compare is the expensive endpoint (pandas + Mann-Whitney). Tab 1 goes
+  // first; then warm the four treated arms one at a time. healthy/none waits.
+  void (async () => {
+    for (const combo of PREFETCH_COMPARE_COMBOS) {
+      await cachedFetch<CompareResponse>("/api/compare", {
+        ...combo,
+        sample_type: DEFAULT_COMPARE_PARAMS.sample_type,
+        aggregation: DEFAULT_COMPARE_PARAMS.aggregation,
+      });
+    }
+  })();
 }

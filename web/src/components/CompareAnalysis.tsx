@@ -85,6 +85,9 @@ export function CompareAnalysis({ active = true }: { active?: boolean }) {
   }, [aggregation, condition, treatment, sampleType]);
 
   const significant = data?.tests.filter((t) => t.significant) ?? [];
+  const isEmpty =
+    data !== null &&
+    (data.n_samples === 0 || data.points.length === 0 || data.tests.length === 0);
 
   return (
     <div>
@@ -165,122 +168,115 @@ export function CompareAnalysis({ active = true }: { active?: boolean }) {
             Loading…
           </div>
         )}
-        {data && !loading && (
+        {data && !loading && isEmpty && (
+          <div className="flex h-full w-full items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-6 text-center text-sm text-amber-800">
+            No samples match this combination, or none of the matching subjects
+            have a recorded response. Healthy controls are untreated and have no
+            response, so they cannot be compared.
+          </div>
+        )}
+        {data && !loading && !isEmpty && (
           <FrequencyBoxPlot points={data.points} active={active} />
         )}
       </div>
 
-      {data && (
+      {data && !isEmpty && (
         <FadeIn
           key={`${data.filters.condition}-${data.filters.treatment}-${data.filters.sample_type}-${data.aggregation}`}
           className={
             loading ? "opacity-50 transition-opacity" : "transition-opacity"
           }
         >
-          {data.tests.length === 0 ? (
-            <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              No samples match this combination, or none of the matching
-              subjects have a recorded response. Healthy controls are untreated
-              and have no response, so they cannot be compared.
+          <p className="mt-4 rounded-lg border border-[#e5e0d9] bg-[#f9f6f2] p-3 text-sm text-[#555]">
+            {data.aggregation_note}
+          </p>
+
+          {/* Statistical tests section */}
+          <div className="mt-8">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#e5341a]">
+              Statistical tests
             </p>
-          ) : (
-            <>
-              <p className="mt-4 rounded-lg border border-[#e5e0d9] bg-[#f9f6f2] p-3 text-sm text-[#555]">
-                {data.aggregation_note}
-              </p>
+            <p className="mt-1 text-sm text-[#666]">
+              {data.test}, {data.correction} across {data.tests.length}{" "}
+              populations, α = {data.alpha}.
+            </p>
+          </div>
 
-              {/* Statistical tests section */}
-              <div className="mt-8">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#e5341a]">
-                  Statistical tests
-                </p>
-                <p className="mt-1 text-sm text-[#666]">
-                  {data.test}, {data.correction} across {data.tests.length}{" "}
-                  populations, α = {data.alpha}.
-                </p>
-              </div>
+          <table className="mt-4 w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-[#e5e0d9] text-left">
+                {[
+                  "population",
+                  "median (resp)",
+                  "median (non-resp)",
+                  "difference",
+                  "p",
+                  "q (BH)",
+                  "effect size",
+                  "significant",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="py-2 pr-4 last:pr-0 text-[10px] font-semibold uppercase tracking-widest text-[#999]"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.tests.map((test) => (
+                <tr
+                  key={test.population}
+                  className={test.significant ? "bg-[#fff8f5]" : undefined}
+                >
+                  <td className="py-1.5 pr-4 text-[#333]">{test.population}</td>
+                  <td className="py-1.5 pr-4 tabular-nums text-[#333]">
+                    {test.median_responders.toFixed(2)}%
+                  </td>
+                  <td className="py-1.5 pr-4 tabular-nums text-[#333]">
+                    {test.median_non_responders.toFixed(2)}%
+                  </td>
+                  <td className="py-1.5 pr-4 tabular-nums text-[#333]">
+                    {test.median_difference >= 0 ? "+" : ""}
+                    {test.median_difference.toFixed(2)}
+                  </td>
+                  <td className="py-1.5 pr-4 tabular-nums text-[#333]">
+                    {test.p_value.toFixed(4)}
+                  </td>
+                  <td className="py-1.5 pr-4 tabular-nums text-[#333]">
+                    {test.p_value_adjusted.toFixed(4)}
+                  </td>
+                  <td className="py-1.5 pr-4 tabular-nums text-[#333]">
+                    {test.effect_size.toFixed(3)}
+                  </td>
+                  <td className="py-1.5 text-[#333]">
+                    {test.significant ? "yes" : "no"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
-              <table className="mt-4 w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-[#e5e0d9] text-left">
-                    {[
-                      "population",
-                      "median (resp)",
-                      "median (non-resp)",
-                      "difference",
-                      "p",
-                      "q (BH)",
-                      "effect size",
-                      "significant",
-                    ].map((h) => (
-                      <th
-                        key={h}
-                        className="py-2 pr-4 last:pr-0 text-[10px] font-semibold uppercase tracking-widest text-[#999]"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.tests.map((test) => (
-                    <tr
-                      key={test.population}
-                      className={
-                        test.significant ? "bg-[#fff8f5]" : undefined
-                      }
-                    >
-                      <td className="py-1.5 pr-4 text-[#333]">
-                        {test.population}
-                      </td>
-                      <td className="py-1.5 pr-4 tabular-nums text-[#333]">
-                        {test.median_responders.toFixed(2)}%
-                      </td>
-                      <td className="py-1.5 pr-4 tabular-nums text-[#333]">
-                        {test.median_non_responders.toFixed(2)}%
-                      </td>
-                      <td className="py-1.5 pr-4 tabular-nums text-[#333]">
-                        {test.median_difference >= 0 ? "+" : ""}
-                        {test.median_difference.toFixed(2)}
-                      </td>
-                      <td className="py-1.5 pr-4 tabular-nums text-[#333]">
-                        {test.p_value.toFixed(4)}
-                      </td>
-                      <td className="py-1.5 pr-4 tabular-nums text-[#333]">
-                        {test.p_value_adjusted.toFixed(4)}
-                      </td>
-                      <td className="py-1.5 pr-4 tabular-nums text-[#333]">
-                        {test.effect_size.toFixed(3)}
-                      </td>
-                      <td className="py-1.5 text-[#333]">
-                        {test.significant ? "yes" : "no"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <p className="mt-4 text-sm text-[#555]">
-                {significant.length === 0 ? (
-                  <>
-                    No population shows a significant difference in relative
-                    frequency between responders and non-responders (all
-                    BH-adjusted q &gt;{" "}
-                    {Math.min(
-                      ...data.tests.map((t) => t.p_value_adjusted),
-                    ).toFixed(2)}
-                    ). Effect sizes are negligible, so this is an absence of
-                    signal rather than an underpowered test.
-                  </>
-                ) : (
-                  <>
-                    Significant after correction:{" "}
-                    {significant.map((t) => t.population).join(", ")}.
-                  </>
-                )}
-              </p>
-            </>
-          )}
+          <p className="mt-4 text-sm text-[#555]">
+            {significant.length === 0 ? (
+              <>
+                No population shows a significant difference in relative
+                frequency between responders and non-responders (all
+                BH-adjusted q &gt;{" "}
+                {Math.min(
+                  ...data.tests.map((t) => t.p_value_adjusted),
+                ).toFixed(2)}
+                ). Effect sizes are negligible, so this is an absence of
+                signal rather than an underpowered test.
+              </>
+            ) : (
+              <>
+                Significant after correction:{" "}
+                {significant.map((t) => t.population).join(", ")}.
+              </>
+            )}
+          </p>
         </FadeIn>
       )}
     </div>
