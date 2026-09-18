@@ -1,0 +1,9 @@
+.git
+.venv
+__pycache__
+*.db
+web/node_modules
+web/.next
+web/.git
+**/.DS_Store
+**/npm-debug.log*
