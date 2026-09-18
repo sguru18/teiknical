@@ -96,9 +96,14 @@ export default function ComparePage() {
 
   return (
     <main className="mx-auto w-full max-w-5xl p-8 font-sans">
-      <Link href="/" className="text-sm text-blue-700 underline">
-        ← Frequency summary
-      </Link>
+      <div className="flex gap-4 text-sm">
+        <Link href="/" className="text-blue-700 underline">
+          ← Frequency summary
+        </Link>
+        <Link href="/cohort" className="text-blue-700 underline">
+          Cohort breakdown →
+        </Link>
+      </div>
 
       <h1 className="mt-4 text-2xl font-semibold">
         Responders vs non-responders

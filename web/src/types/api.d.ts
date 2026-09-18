@@ -68,10 +68,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cohort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cohort
+         * @description Part 4: baseline samples for one treatment arm, broken down by project,
+         *     response and sex.
+         *
+         *     Counts are per subject for response and sex, because those are properties
+         *     of a person rather than of a specimen. Project counts are per sample, as
+         *     the question asks how many samples each project contributed.
+         */
+        get: operations["get_cohort_api_cohort_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * CategoryCount
+         * @description A labelled count. Used for the per-project, per-response and per-sex
+         *     breakdowns so the client can render them all with one component.
+         */
+        CategoryCount: {
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+        };
         /**
          * CohortFilters
          * @description The filters that produced a result set, echoed back so the client can
@@ -86,6 +122,22 @@ export interface components {
             sample_type?: ("PBMC" | "WB") | null;
             /** Time From Treatment Start */
             time_from_treatment_start?: number | null;
+        };
+        /** CohortResponse */
+        CohortResponse: {
+            filters: components["schemas"]["CohortFilters"];
+            /** Sample Ids */
+            sample_ids: string[];
+            /** N Samples */
+            n_samples: number;
+            /** N Subjects */
+            n_subjects: number;
+            /** Samples By Project */
+            samples_by_project: components["schemas"]["CategoryCount"][];
+            /** Subjects By Response */
+            subjects_by_response: components["schemas"]["CategoryCount"][];
+            /** Subjects By Sex */
+            subjects_by_sex: components["schemas"]["CategoryCount"][];
         };
         /** CompareResponse */
         CompareResponse: {
@@ -342,6 +394,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompareResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cohort_api_cohort_get: {
+        parameters: {
+            query?: {
+                condition?: string;
+                treatment?: string;
+                sample_type?: "PBMC" | "WB";
+                time_from_treatment_start?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CohortResponse"];
                 };
             };
             /** @description Validation Error */

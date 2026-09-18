@@ -18,6 +18,8 @@ from api.db import get_connection
 from api.models import (
     Aggregation,
     CohortFilters,
+    CategoryCount,
+    CohortResponse,
     CompareResponse,
     FilterOptions,
     FrequencyPoint,
@@ -155,4 +157,80 @@ def get_compare(
         aggregation_note=AGGREGATION_NOTES[aggregation],
         points=points,
         tests=compare_populations(frame, alpha),
+    )
+
+
+# The cohort itself: one row per matching sample, joined to its subject.
+COHORT_SQL = """
+    SELECT s.sample_id, s.sbj_id, sub.proj_id, sub.response, sub.sex
+    FROM samples s
+    JOIN subjects sub ON sub.sbj_id = s.sbj_id
+    WHERE sub.condition = ?
+      AND sub.treatment = ?
+      AND s.sample_type = ?
+      AND s.time_from_treatment_start = ?
+"""
+
+# LEFT JOIN from projects so a project contributing no samples reports zero
+# rather than vanishing. Melanoma PBMC samples only exist in two of the three
+# projects, and a missing row reads like a bug.
+SAMPLES_BY_PROJECT_SQL = f"""
+    SELECT p.proj_id AS label, COUNT(c.sample_id) AS count
+    FROM projects p
+    LEFT JOIN ({COHORT_SQL}) c ON c.proj_id = p.proj_id
+    GROUP BY p.proj_id
+    ORDER BY p.proj_id
+"""
+
+
+@app.get("/api/cohort", response_model=CohortResponse, tags=["Part 4"])
+def get_cohort(
+    conn: sqlite3.Connection = Depends(get_connection),
+    condition: str = Query(default="melanoma"),
+    treatment: str = Query(default="miraclib"),
+    sample_type: SampleType = Query(default="PBMC"),
+    time_from_treatment_start: int = Query(default=0, ge=0),
+) -> CohortResponse:
+    """Part 4: baseline samples for one treatment arm, broken down by project,
+    response and sex.
+
+    Counts are per subject for response and sex, because those are properties
+    of a person rather than of a specimen. Project counts are per sample, as
+    the question asks how many samples each project contributed.
+    """
+    params = (condition, treatment, sample_type, time_from_treatment_start)
+
+    rows = conn.execute(COHORT_SQL, params).fetchall()
+    subjects = {row["sbj_id"]: row for row in rows}
+
+    def subject_counts(column: str) -> list[CategoryCount]:
+        tally: dict[str, int] = {}
+        for row in subjects.values():
+            # Untreated healthy controls have no recorded response, which is a
+            # real category rather than missing data.
+            label = row[column] if row[column] is not None else "not recorded"
+            tally[label] = tally.get(label, 0) + 1
+        return [
+            CategoryCount(label=label, count=count)
+            for label, count in sorted(tally.items())
+        ]
+
+    by_project = [
+        CategoryCount(label=row["label"], count=row["count"])
+        for row in conn.execute(SAMPLES_BY_PROJECT_SQL, params)
+    ]
+
+    return CohortResponse(
+        filters=CohortFilters(
+            condition=condition,
+            treatment=treatment,
+            sample_type=sample_type,
+            time_from_treatment_start=time_from_treatment_start,
+        ),
+        sample_ids=[row["sample_id"] for row in rows],
+        n_samples=len(rows),
+        n_subjects=len(subjects),
+        samples_by_project=by_project,
+        subjects_by_response=subject_counts("response"),
+        subjects_by_sex=subject_counts("sex"),
     )
