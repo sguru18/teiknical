@@ -16,9 +16,21 @@ export function loadPlotly() {
 
 const COLORS = { yes: "#2563eb", no: "#dc2626" };
 
-export function FrequencyBoxPlot({ points }: { points: FrequencyPoint[] }) {
+export function FrequencyBoxPlot({
+  points,
+  active = true,
+}: {
+  points: FrequencyPoint[];
+  active?: boolean;
+}) {
   const container = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!active || !container.current) return;
+    const node = container.current;
+    loadPlotly().then((Plotly) => Plotly.Plots.resize(node));
+  }, [active]);
 
   useEffect(() => {
     let cancelled = false;

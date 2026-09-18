@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import { FadeIn } from "@/components/FadeIn";
 import { Select } from "@/components/Select";
 import {
-  fetchJson,
+  cachedFetch,
+  DEFAULT_COHORT_PARAMS,
+  peekCached,
   type CategoryCount,
   type CohortResponse,
   type FilterOptions,
@@ -60,31 +62,52 @@ function Breakdown({
 }
 
 export function CohortBreakdown() {
-  const [data, setData] = useState<CohortResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [condition, setCondition] = useState<string>(
+    DEFAULT_COHORT_PARAMS.condition,
+  );
+  const [treatment, setTreatment] = useState<string>(
+    DEFAULT_COHORT_PARAMS.treatment,
+  );
+  const [sampleType, setSampleType] = useState<string>(
+    DEFAULT_COHORT_PARAMS.sample_type,
+  );
+  const [timepoint, setTimepoint] = useState(
+    String(DEFAULT_COHORT_PARAMS.time_from_treatment_start),
+  );
 
-  const [options, setOptions] = useState<FilterOptions | null>(null);
-  const [condition, setCondition] = useState("melanoma");
-  const [treatment, setTreatment] = useState("miraclib");
-  const [sampleType, setSampleType] = useState("PBMC");
-  const [timepoint, setTimepoint] = useState("0");
+  const [options, setOptions] = useState<FilterOptions | null>(
+    () => peekCached("/api/filters") ?? null,
+  );
+  const [data, setData] = useState<CohortResponse | null>(
+    () => peekCached("/api/cohort", DEFAULT_COHORT_PARAMS) ?? null,
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(() => data === null);
 
   useEffect(() => {
-    fetchJson<FilterOptions>("/api/filters").then(setOptions).catch(() => {});
+    cachedFetch<FilterOptions>("/api/filters").then(setOptions).catch(() => {});
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    setLoading(true);
-
-    fetchJson<CohortResponse>("/api/cohort", {
+    const params = {
       condition,
       treatment,
       sample_type: sampleType,
       time_from_treatment_start: timepoint,
-    })
+    };
+    const cached = peekCached<CohortResponse>("/api/cohort", params);
+    if (cached) {
+      setData(cached);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setError(null);
+    setLoading(true);
+
+    cachedFetch<CohortResponse>("/api/cohort", params)
       .then((next) => {
         if (!cancelled) setData(next);
       })

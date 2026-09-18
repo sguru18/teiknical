@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { CohortBreakdown } from "@/components/CohortBreakdown";
 import { CompareAnalysis } from "@/components/CompareAnalysis";
 import { FrequencySummary } from "@/components/FrequencySummary";
+import { loadPlotly } from "@/components/FrequencyBoxPlot";
+import { prefetchDefaults } from "@/lib/api";
 
 type Tab = "summary" | "compare" | "cohort";
 
@@ -16,6 +18,11 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("summary");
+
+  useEffect(() => {
+    prefetchDefaults();
+    void loadPlotly();
+  }, []);
 
   return (
     <main className="mx-auto w-full max-w-5xl px-8 pb-16">
@@ -51,10 +58,25 @@ export default function Home() {
       </div>
 
       {/* Content card — white on cream, matching their card blocks */}
-      <div className="mt-4 bg-white rounded-xl border border-[#e5e0d9] px-8 py-8">
-        {activeTab === "summary" && <FrequencySummary />}
-        {activeTab === "compare" && <CompareAnalysis />}
-        {activeTab === "cohort" && <CohortBreakdown />}
+      {/* Keep compare mounted (invisible, not display:none) so Plotly can
+          measure a real width and draw while the summary tab is still open. */}
+      <div className="relative mt-4 bg-white rounded-xl border border-[#e5e0d9] px-8 py-8">
+        <div className={activeTab === "summary" ? undefined : "hidden"}>
+          <FrequencySummary />
+        </div>
+        <div
+          className={
+            activeTab === "compare"
+              ? undefined
+              : "invisible pointer-events-none absolute inset-x-8 top-8"
+          }
+          aria-hidden={activeTab !== "compare"}
+        >
+          <CompareAnalysis active={activeTab === "compare"} />
+        </div>
+        <div className={activeTab === "cohort" ? undefined : "hidden"}>
+          <CohortBreakdown />
+        </div>
       </div>
     </main>
   );

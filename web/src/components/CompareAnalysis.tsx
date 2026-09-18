@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 
-import { FrequencyBoxPlot, loadPlotly } from "@/components/FrequencyBoxPlot";
+import { FrequencyBoxPlot } from "@/components/FrequencyBoxPlot";
 import { FadeIn } from "@/components/FadeIn";
 import { Select } from "@/components/Select";
 import {
-  fetchJson,
+  cachedFetch,
+  DEFAULT_COMPARE_PARAMS,
+  peekCached,
   type Aggregation,
   type CompareResponse,
   type FilterOptions,
@@ -18,35 +20,53 @@ const AGGREGATION_LABELS: Record<Aggregation, string> = {
   all_samples: "All samples (not independent)",
 };
 
-export function CompareAnalysis() {
-  const [data, setData] = useState<CompareResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [aggregation, setAggregation] = useState<Aggregation>("baseline");
+export function CompareAnalysis({ active = true }: { active?: boolean }) {
+  const [aggregation, setAggregation] = useState<Aggregation>(
+    DEFAULT_COMPARE_PARAMS.aggregation,
+  );
+  const [condition, setCondition] = useState<string>(
+    DEFAULT_COMPARE_PARAMS.condition,
+  );
+  const [treatment, setTreatment] = useState<string>(
+    DEFAULT_COMPARE_PARAMS.treatment,
+  );
+  const [sampleType, setSampleType] = useState<string>(
+    DEFAULT_COMPARE_PARAMS.sample_type,
+  );
 
-  const [options, setOptions] = useState<FilterOptions | null>(null);
-  const [condition, setCondition] = useState("melanoma");
-  const [treatment, setTreatment] = useState("miraclib");
-  const [sampleType, setSampleType] = useState("PBMC");
+  const [options, setOptions] = useState<FilterOptions | null>(
+    () => peekCached("/api/filters") ?? null,
+  );
+  const [data, setData] = useState<CompareResponse | null>(
+    () => peekCached("/api/compare", DEFAULT_COMPARE_PARAMS) ?? null,
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(() => data === null);
 
   useEffect(() => {
-    // Kick off the Plotly chunk now, in parallel with /api/compare, instead of
-    // waiting until FrequencyBoxPlot mounts after the response arrives.
-    void loadPlotly();
-    fetchJson<FilterOptions>("/api/filters").then(setOptions).catch(() => {});
+    cachedFetch<FilterOptions>("/api/filters").then(setOptions).catch(() => {});
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    setLoading(true);
-
-    fetchJson<CompareResponse>("/api/compare", {
+    const params = {
       aggregation,
       condition,
       treatment,
       sample_type: sampleType,
-    })
+    };
+    const cached = peekCached<CompareResponse>("/api/compare", params);
+    if (cached) {
+      setData(cached);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setError(null);
+    setLoading(true);
+
+    cachedFetch<CompareResponse>("/api/compare", params)
       .then((next) => {
         // Keep the previous result on screen until the new one arrives, so the
         // chart and table do not unmount and collapse the page height.
@@ -145,7 +165,9 @@ export function CompareAnalysis() {
             Loading…
           </div>
         )}
-        {data && !loading && <FrequencyBoxPlot points={data.points} />}
+        {data && !loading && (
+          <FrequencyBoxPlot points={data.points} active={active} />
+        )}
       </div>
 
       {data && (

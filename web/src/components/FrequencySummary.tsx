@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { FadeIn } from "@/components/FadeIn";
-import { fetchJson, type SummaryResponse } from "@/lib/api";
+import { cachedFetch, type SummaryResponse } from "@/lib/api";
 
 const PAGE_SIZE = 50;
 
@@ -17,7 +17,7 @@ export function FrequencySummary() {
 
   useEffect(() => {
     setError(null);
-    fetchJson<SummaryResponse>("/api/summary", {
+    cachedFetch<SummaryResponse>("/api/summary", {
       limit: PAGE_SIZE,
       offset: page * PAGE_SIZE,
     })

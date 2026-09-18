@@ -14,19 +14,39 @@ export type CategoryCount = components["schemas"]["CategoryCount"];
 // schemas, so derive it from the field that uses it.
 export type Aggregation = CompareResponse["aggregation"];
 
+export type QueryParams = Record<string, string | number | undefined>;
+
+export const DEFAULT_COMPARE_PARAMS = {
+  condition: "melanoma",
+  treatment: "miraclib",
+  sample_type: "PBMC",
+  aggregation: "baseline",
+} as const;
+
+export const DEFAULT_COHORT_PARAMS = {
+  condition: "melanoma",
+  treatment: "miraclib",
+  sample_type: "PBMC",
+  time_from_treatment_start: 0,
+} as const;
+
+function requestUrl(path: string, params: QueryParams = {}): string {
+  const query = new URLSearchParams();
+  for (const key of Object.keys(params).sort()) {
+    const value = params[key];
+    if (value !== undefined) query.set(key, String(value));
+  }
+  const suffix = query.toString() ? `?${query}` : "";
+  return `${path}${suffix}`;
+}
+
 // Relative URL: resolves against the page origin, which Next proxies to
 // FastAPI. Keeps the backend address out of the browser bundle.
 export async function fetchJson<T>(
   path: string,
-  params: Record<string, string | number | undefined> = {},
+  params: QueryParams = {},
 ): Promise<T> {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) query.set(key, String(value));
-  }
-
-  const suffix = query.toString() ? `?${query}` : "";
-  const res = await fetch(`${path}${suffix}`);
+  const res = await fetch(requestUrl(path, params));
 
   if (!res.ok) {
     const detail = await res.text();
@@ -34,4 +54,38 @@ export async function fetchJson<T>(
   }
 
   return res.json() as Promise<T>;
+}
+
+// Session cache. The SQLite file is built once by the pipeline, so a given
+// filter combo always returns the same JSON. Cache the in-flight promise as
+// well as the resolved value so a prefetch and a later mount share one request.
+type CacheEntry = { promise: Promise<unknown>; value?: unknown };
+const cache = new Map<string, CacheEntry>();
+
+export function peekCached<T>(path: string, params: QueryParams = {}): T | undefined {
+  return cache.get(requestUrl(path, params))?.value as T | undefined;
+}
+
+export function cachedFetch<T>(
+  path: string,
+  params: QueryParams = {},
+): Promise<T> {
+  const key = requestUrl(path, params);
+  const existing = cache.get(key);
+  if (existing) return existing.promise as Promise<T>;
+
+  const promise = fetchJson<T>(path, params).then((value) => {
+    const entry = cache.get(key);
+    if (entry) entry.value = value;
+    return value;
+  });
+  promise.catch(() => cache.delete(key));
+  cache.set(key, { promise });
+  return promise;
+}
+
+export function prefetchDefaults(): void {
+  void cachedFetch<FilterOptions>("/api/filters");
+  void cachedFetch<CompareResponse>("/api/compare", DEFAULT_COMPARE_PARAMS);
+  void cachedFetch<CohortResponse>("/api/cohort", DEFAULT_COHORT_PARAMS);
 }
