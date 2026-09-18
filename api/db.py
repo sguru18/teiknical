@@ -27,7 +27,12 @@ def get_connection() -> Iterator[sqlite3.Connection]:
             detail=f"Database not found at {DB_PATH}. Run `make pipeline` first.",
         )
 
-    conn = sqlite3.connect(DB_PATH)
+    # check_same_thread=False: FastAPI runs sync dependencies/endpoints on a
+    # threadpool worker, so the connection is often created on a different
+    # thread than the one that executes queries. Safe here because each request
+    # gets its own connection and we close it in the finally below — we are not
+    # sharing one Connection across concurrent requests.
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = (
         sqlite3.Row
     )  # makes each row a sqlite3.Row object, meaning we can access columns by name. this will allow easy conversion to a dict via keyword arg unpacking

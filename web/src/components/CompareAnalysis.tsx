@@ -84,18 +84,21 @@ export function CompareAnalysis() {
           value={condition}
           options={options?.conditions}
           onChange={setCondition}
+          disabled={loading}
         />
         <Select
           label="Treatment"
           value={treatment}
           options={options?.treatments}
           onChange={setTreatment}
+          disabled={loading}
         />
         <Select
           label="Sample type"
           value={sampleType}
           options={options?.sample_types}
           onChange={setSampleType}
+          disabled={loading}
         />
       </div>
 
@@ -127,10 +130,12 @@ export function CompareAnalysis() {
       {/* Chart area is always reserved at full height so the page does not
           shift when data arrives. The skeleton shows while loading. */}
       <div className="mt-6 h-[480px] w-full">
-        {!data && !error && (
-          <div className="h-full w-full animate-pulse rounded-xl bg-[#f0ebe4]" />
+        {(loading || !data) && !error && (
+          <div className="flex h-full w-full items-center justify-center rounded-xl bg-[#f0ebe4] text-sm text-[#999]">
+            Loading…
+          </div>
         )}
-        {data && <FrequencyBoxPlot points={data.points} />}
+        {data && !loading && <FrequencyBoxPlot points={data.points} />}
       </div>
 
       {data && (

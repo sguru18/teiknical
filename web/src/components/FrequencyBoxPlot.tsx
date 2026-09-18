@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { FrequencyPoint } from "@/lib/api";
 
@@ -18,9 +18,11 @@ const COLORS = { yes: "#2563eb", no: "#dc2626" };
 
 export function FrequencyBoxPlot({ points }: { points: FrequencyPoint[] }) {
   const container = useRef<HTMLDivElement>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setReady(false);
 
     loadPlotly().then((Plotly) => {
       if (cancelled || !container.current) return;
@@ -59,7 +61,9 @@ export function FrequencyBoxPlot({ points }: { points: FrequencyPoint[] }) {
           plot_bgcolor: "transparent",
         },
         { responsive: true, displayModeBar: false },
-      );
+      ).then(() => {
+        if (!cancelled) setReady(true);
+      });
     });
 
     const node = container.current;
@@ -69,5 +73,14 @@ export function FrequencyBoxPlot({ points }: { points: FrequencyPoint[] }) {
     };
   }, [points]);
 
-  return <div ref={container} className="h-[480px] w-full" />;
+  return (
+    <div className="relative h-[480px] w-full">
+      {!ready && (
+        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-[#f0ebe4] text-sm text-[#999]">
+          Loading…
+        </div>
+      )}
+      <div ref={container} className="h-full w-full" />
+    </div>
+  );
 }
