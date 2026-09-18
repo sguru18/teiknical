@@ -24,14 +24,192 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/filters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Filters
+         * @description Distinct filter values, so the dashboard's dropdowns follow the data.
+         */
+        get: operations["get_filters_api_filters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Compare
+         * @description Part 3: population frequencies in responders vs non-responders.
+         *
+         *     The assignment's cohort (melanoma, miraclib, PBMC) is the default rather
+         *     than a hardcoded constant, so the same comparison can be run against any
+         *     other indication or treatment without a code change.
+         */
+        get: operations["get_compare_api_compare_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * CohortFilters
+         * @description The filters that produced a result set, echoed back so the client can
+         *     label charts without re-deriving what it asked for.
+         */
+        CohortFilters: {
+            /** Condition */
+            condition?: string | null;
+            /** Treatment */
+            treatment?: string | null;
+            /** Sample Type */
+            sample_type?: ("PBMC" | "WB") | null;
+            /** Time From Treatment Start */
+            time_from_treatment_start?: number | null;
+        };
+        /** CompareResponse */
+        CompareResponse: {
+            filters: components["schemas"]["CohortFilters"];
+            /** N Samples */
+            n_samples: number;
+            /** N Subjects */
+            n_subjects: number;
+            /**
+             * Test
+             * @description Name of the statistical test applied
+             */
+            test: string;
+            /**
+             * Correction
+             * @description Multiple-comparison correction method
+             */
+            correction: string;
+            /** Alpha */
+            alpha: number;
+            /**
+             * Aggregation
+             * @enum {string}
+             */
+            aggregation: "baseline" | "subject_mean" | "all_samples";
+            /**
+             * Aggregation Note
+             * @description Plain-language statement of how repeated measures per subject were handled, so a reader of the chart knows what each point represents.
+             */
+            aggregation_note: string;
+            /** Points */
+            points: components["schemas"]["FrequencyPoint"][];
+            /** Tests */
+            tests: components["schemas"]["PopulationTest"][];
+        };
+        /**
+         * FilterOptions
+         * @description Distinct values available for each filter, read from the database so the
+         *     UI never offers a combination the data cannot describe.
+         */
+        FilterOptions: {
+            /** Conditions */
+            conditions: string[];
+            /** Treatments */
+            treatments: string[];
+            /** Sample Types */
+            sample_types: string[];
+            /** Timepoints */
+            timepoints: number[];
+        };
+        /**
+         * FrequencyPoint
+         * @description A single observation feeding the boxplots. Carries subject so the client
+         *     can show that samples are repeated measures rather than independent.
+         */
+        FrequencyPoint: {
+            /** Sample */
+            sample: string;
+            /** Subject */
+            subject: string;
+            /** Population */
+            population: string;
+            /** Percentage */
+            percentage: number;
+            /**
+             * Response
+             * @enum {string}
+             */
+            response: "yes" | "no";
+            /** Time From Treatment Start */
+            time_from_treatment_start: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * PopulationTest
+         * @description Result of one test, for one population, between responders and non-responders.
+         */
+        PopulationTest: {
+            /** Population */
+            population: string;
+            /** N Responders */
+            n_responders: number;
+            /** N Non Responders */
+            n_non_responders: number;
+            /** Median Responders */
+            median_responders: number;
+            /** Median Non Responders */
+            median_non_responders: number;
+            /**
+             * Median Difference
+             * @description responders minus non-responders
+             */
+            median_difference: number;
+            /**
+             * Statistic
+             * @description Mann-Whitney U statistic
+             */
+            statistic: number;
+            /** P Value */
+            p_value: number;
+            /**
+             * P Value Adjusted
+             * @description Corrected across all populations tested
+             */
+            p_value_adjusted: number;
+            /**
+             * Significant
+             * @description p_value_adjusted < alpha
+             */
+            significant: boolean;
+            /**
+             * Effect Size
+             * @description Rank-biserial correlation, -1 to 1. Near zero means the groups overlap almost entirely, regardless of the p-value.
+             */
+            effect_size: number;
+            /**
+             * P Value Welch
+             * @description Welch's t-test p-value, reported as a sensitivity check. Agreement with the rank-based test is evidence the conclusion does not depend on which test was chosen.
+             */
+            p_value_welch: number;
         };
         /** SummaryResponse */
         SummaryResponse: {
@@ -108,6 +286,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_filters_api_filters_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilterOptions"];
+                };
+            };
+        };
+    };
+    get_compare_api_compare_get: {
+        parameters: {
+            query?: {
+                condition?: string;
+                treatment?: string;
+                sample_type?: "PBMC" | "WB";
+                /** @description How to collapse each subject's repeated measures */
+                aggregation?: "baseline" | "subject_mean" | "all_samples";
+                alpha?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompareResponse"];
                 };
             };
             /** @description Validation Error */

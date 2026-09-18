@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { fetchJson, type SummaryResponse } from "@/lib/api";
@@ -50,8 +51,11 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl p-8 font-sans">
+    <main className="mx-auto w-full max-w-4xl p-8 font-sans">
       <h1 className="text-2xl font-semibold">Cell population frequencies</h1>
+      <Link href="/compare" className="text-sm text-blue-700 underline">
+        Responders vs non-responders →
+      </Link>
       <p className="mt-1 text-sm text-zinc-600">
         Relative frequency of each immune cell population within each sample.
       </p>

@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 // Proxy /api to the FastAPI server so the browser only ever sees one origin.
 // Without this, a client-side fetch to localhost:8000 breaks under Codespaces
 // port forwarding, where each port gets its own hostname.
+
+// this basically means that the browser just asks the NextJS server for stuff instead of asking the fastAPI directly
+// and the NextJS server asks on behalf of the server. this way there is never a cross origin, all requests come from one place
+
 const API_URL = process.env.API_URL ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {

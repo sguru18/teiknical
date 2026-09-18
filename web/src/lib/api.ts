@@ -4,6 +4,13 @@ import type { components } from "@/types/api";
 // components["schemas"][...] path. Regenerate with `npm run gen:types`.
 export type SummaryRow = components["schemas"]["SummaryRow"];
 export type SummaryResponse = components["schemas"]["SummaryResponse"];
+export type CompareResponse = components["schemas"]["CompareResponse"];
+export type FrequencyPoint = components["schemas"]["FrequencyPoint"];
+export type PopulationTest = components["schemas"]["PopulationTest"];
+export type FilterOptions = components["schemas"]["FilterOptions"];
+// Literal type aliases are inlined by Pydantic rather than emitted as named
+// schemas, so derive it from the field that uses it.
+export type Aggregation = CompareResponse["aggregation"];
 
 // Relative URL: resolves against the page origin, which Next proxies to
 // FastAPI. Keeps the backend address out of the browser bundle.

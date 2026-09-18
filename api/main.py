@@ -8,8 +8,23 @@ import sqlite3
 
 from fastapi import Depends, FastAPI, Query
 
+from api.analysis import (
+    AGGREGATION_NOTES,
+    apply_aggregation,
+    compare_populations,
+    load_frequencies,
+)
 from api.db import get_connection
-from api.models import SummaryResponse, SummaryRow
+from api.models import (
+    Aggregation,
+    CohortFilters,
+    CompareResponse,
+    FilterOptions,
+    FrequencyPoint,
+    SampleType,
+    SummaryResponse,
+    SummaryRow,
+)
 
 app = FastAPI(
     title="Loblaw Bio cell-count analysis API",
@@ -71,3 +86,73 @@ def get_summary(
     n_samples = conn.execute("SELECT COUNT(*) AS n FROM samples").fetchone()["n"]
 
     return SummaryResponse(rows=rows, n_samples=n_samples, populations=populations)
+
+
+@app.get("/api/filters", response_model=FilterOptions, tags=["Shared"])
+def get_filters(
+    conn: sqlite3.Connection = Depends(get_connection),
+) -> FilterOptions:
+    """Distinct filter values, so the dashboard's dropdowns follow the data."""
+
+    def distinct(column: str, table: str) -> list:
+        sql = f"SELECT DISTINCT {column} AS v FROM {table} ORDER BY {column}"
+        return [row["v"] for row in conn.execute(sql)]
+
+    return FilterOptions(
+        conditions=distinct("condition", "subjects"),
+        treatments=distinct("treatment", "subjects"),
+        sample_types=distinct("sample_type", "samples"),
+        timepoints=distinct("time_from_treatment_start", "samples"),
+    )
+
+
+@app.get("/api/compare", response_model=CompareResponse, tags=["Part 3"])
+def get_compare(
+    conn: sqlite3.Connection = Depends(get_connection),
+    condition: str = Query(default="melanoma"),
+    treatment: str = Query(default="miraclib"),
+    sample_type: SampleType = Query(default="PBMC"),
+    aggregation: Aggregation = Query(
+        default="baseline",
+        description="How to collapse each subject's repeated measures",
+    ),
+    alpha: float = Query(default=0.05, gt=0, lt=1),
+) -> CompareResponse:
+    """Part 3: population frequencies in responders vs non-responders.
+
+    The assignment's cohort (melanoma, miraclib, PBMC) is the default rather
+    than a hardcoded constant, so the same comparison can be run against any
+    other indication or treatment without a code change.
+    """
+    frame = load_frequencies(conn, condition, treatment, sample_type)
+    frame = apply_aggregation(frame, aggregation)
+
+    points = [
+        FrequencyPoint(
+            sample=row.sample,
+            subject=row.subject,
+            population=row.population,
+            percentage=row.percentage,
+            response=row.response,
+            time_from_treatment_start=row.time_from_treatment_start,
+        )
+        for row in frame.itertuples()
+    ]
+
+    return CompareResponse(
+        filters=CohortFilters(
+            condition=condition,
+            treatment=treatment,
+            sample_type=sample_type,
+            time_from_treatment_start=0 if aggregation == "baseline" else None,
+        ),
+        n_samples=int(frame["sample"].nunique()),
+        n_subjects=int(frame["subject"].nunique()),
+        test="Mann-Whitney U (two-sided)",
+        correction="Benjamini-Hochberg FDR",
+        alpha=alpha,
+        aggregation=aggregation,
+        aggregation_note=AGGREGATION_NOTES[aggregation],
+        points=points,
+        tests=compare_populations(frame, alpha),
+    )

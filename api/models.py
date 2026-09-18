@@ -25,6 +25,23 @@ SampleType = Literal["PBMC", "WB"]
 Response = Literal["yes", "no"]
 Sex = Literal["M", "F"]
 
+# Each subject contributes three samples, so a comparison between responders and
+# non-responders has to say what it does with those repeated measures.
+#   baseline     - pre-treatment sample only; one row per subject
+#   subject_mean - average each subject across timepoints; one row per subject
+#   all_samples  - every sample, which overstates the sample size
+Aggregation = Literal["baseline", "subject_mean", "all_samples"]
+
+
+class FilterOptions(BaseModel):
+    """Distinct values available for each filter, read from the database so the
+    UI never offers a combination the data cannot describe."""
+
+    conditions: list[str]
+    treatments: list[str]
+    sample_types: list[str]
+    timepoints: list[int]
+
 
 class CohortFilters(BaseModel):
     """The filters that produced a result set, echoed back so the client can
@@ -79,12 +96,25 @@ class PopulationTest(BaseModel):
     median_responders: float
     median_non_responders: float
     median_difference: float = Field(description="responders minus non-responders")
-    statistic: float
+    statistic: float = Field(description="Mann-Whitney U statistic")
     p_value: float
     p_value_adjusted: float = Field(
         description="Corrected across all populations tested"
     )
     significant: bool = Field(description="p_value_adjusted < alpha")
+    effect_size: float = Field(
+        description=(
+            "Rank-biserial correlation, -1 to 1. Near zero means the groups "
+            "overlap almost entirely, regardless of the p-value."
+        )
+    )
+    p_value_welch: float = Field(
+        description=(
+            "Welch's t-test p-value, reported as a sensitivity check. Agreement "
+            "with the rank-based test is evidence the conclusion does not depend "
+            "on which test was chosen."
+        )
+    )
 
 
 class CompareResponse(BaseModel):
@@ -94,10 +124,11 @@ class CompareResponse(BaseModel):
     test: str = Field(description="Name of the statistical test applied")
     correction: str = Field(description="Multiple-comparison correction method")
     alpha: float
-    aggregation: str = Field(
+    aggregation: Aggregation
+    aggregation_note: str = Field(
         description=(
-            "How repeated measures per subject were handled before testing, e.g. "
-            "restricted to a single timepoint or averaged within subject."
+            "Plain-language statement of how repeated measures per subject were "
+            "handled, so a reader of the chart knows what each point represents."
         )
     )
     points: list[FrequencyPoint]
