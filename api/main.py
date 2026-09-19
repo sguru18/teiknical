@@ -21,6 +21,7 @@ from api.models import (
     CategoryCount,
     CohortResponse,
     CompareResponse,
+    CrossTabRow,
     FilterOptions,
     FrequencyPoint,
     SampleType,
@@ -185,6 +186,7 @@ def get_filters(
         treatments=distinct("treatment", "subjects"),
         sample_types=distinct("sample_type", "samples"),
         timepoints=distinct("time_from_treatment_start", "samples"),
+        projects=distinct("proj_id", "subjects"),
     )
 
 
@@ -198,6 +200,8 @@ def get_compare(
         default="baseline",
         description="Which timepoint to use (baseline=day 0, day7, day14)",
     ),
+    sex: str | None = Query(default=None, description="Filter to M or F subjects only"),
+    proj_id: str | None = Query(default=None, description="Filter to a single project"),
     alpha: float = Query(default=0.05, gt=0, lt=1),
 ) -> CompareResponse:
     """Part 3: population frequencies in responders vs non-responders.
@@ -205,8 +209,9 @@ def get_compare(
     The assignment's cohort (melanoma, miraclib, PBMC) is the default rather
     than a hardcoded constant, so the same comparison can be run against any
     other indication or treatment without a code change.
+    sex and proj_id narrow the cohort further for subset analysis.
     """
-    frame = load_frequencies(conn, condition, treatment, sample_type)
+    frame = load_frequencies(conn, condition, treatment, sample_type, sex, proj_id)
     frame = apply_aggregation(frame, aggregation)
 
     points = [
@@ -227,6 +232,8 @@ def get_compare(
             treatment=treatment,
             sample_type=sample_type,
             time_from_treatment_start={"baseline": 0, "day7": 7, "day14": 14}[aggregation],
+            sex=sex,
+            proj_id=proj_id,
         ),
         n_samples=int(frame["sample"].nunique()),
         n_subjects=int(frame["subject"].nunique()),
@@ -295,6 +302,44 @@ def get_cohort(
             for label, count in sorted(tally.items())
         ]
 
+    def cross_tab(group_column: str, all_labels: list[str] | None = None) -> list[CrossTabRow]:
+        """Cross-tabulate subjects by group_column × response.
+
+        all_labels: if provided, every label in the list appears in the result
+        even if no subjects fall into it (count = 0). This ensures e.g. prj2
+        shows up as a zero row rather than being absent.
+        """
+        empty: dict[str, int] = {"yes": 0, "no": 0, "not_recorded": 0}
+        tally: dict[str, dict[str, int]] = {
+            lbl: dict(empty) for lbl in (all_labels or [])
+        }
+        for row in subjects.values():
+            group = row[group_column] if row[group_column] is not None else "not recorded"
+            if group not in tally:
+                tally[group] = dict(empty)
+            resp = row["response"]
+            if resp == "yes":
+                tally[group]["yes"] += 1
+            elif resp == "no":
+                tally[group]["no"] += 1
+            else:
+                tally[group]["not_recorded"] += 1
+        return [
+            CrossTabRow(
+                label=group,
+                responders=counts["yes"],
+                non_responders=counts["no"],
+                not_recorded=counts["not_recorded"],
+                total=counts["yes"] + counts["no"] + counts["not_recorded"],
+            )
+            for group, counts in sorted(tally.items())
+        ]
+
+    all_projects = [
+        row["proj_id"]
+        for row in conn.execute("SELECT proj_id FROM projects ORDER BY proj_id")
+    ]
+
     by_project = [
         CategoryCount(label=row["label"], count=row["count"])
         for row in conn.execute(SAMPLES_BY_PROJECT_SQL, params)
@@ -313,6 +358,8 @@ def get_cohort(
         samples_by_project=by_project,
         subjects_by_response=subject_counts("response"),
         subjects_by_sex=subject_counts("sex"),
+        response_by_sex=cross_tab("sex", ["F", "M"]),
+        response_by_project=cross_tab("proj_id", all_projects),
     )
 
 

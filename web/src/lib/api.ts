@@ -10,6 +10,7 @@ export type PopulationTest = components["schemas"]["PopulationTest"];
 export type FilterOptions = components["schemas"]["FilterOptions"];
 export type CohortResponse = components["schemas"]["CohortResponse"];
 export type CategoryCount = components["schemas"]["CategoryCount"];
+export type CrossTabRow = components["schemas"]["CrossTabRow"];
 // Literal type aliases are inlined by Pydantic rather than emitted as named
 // schemas, so derive it from the field that uses it.
 export type Aggregation = CompareResponse["aggregation"];

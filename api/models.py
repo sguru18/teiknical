@@ -41,6 +41,7 @@ class FilterOptions(BaseModel):
     treatments: list[str]
     sample_types: list[str]
     timepoints: list[int]
+    projects: list[str]
 
 
 class CohortFilters(BaseModel):
@@ -51,6 +52,8 @@ class CohortFilters(BaseModel):
     treatment: str | None = None
     sample_type: SampleType | None = None
     time_from_treatment_start: int | None = None
+    sex: str | None = None
+    proj_id: str | None = None
 
 
 # --- Part 2: frequency summary -------------------------------------------------
@@ -178,6 +181,19 @@ class CategoryCount(BaseModel):
     count: int
 
 
+class CrossTabRow(BaseModel):
+    """One row of a response × grouping cross-tabulation.
+
+    Tells you: within this group (e.g. Male, or prj1), how many subjects
+    responded, how many did not, and how many had no recorded response."""
+
+    label: str
+    responders: int
+    non_responders: int
+    not_recorded: int
+    total: int
+
+
 class CohortResponse(BaseModel):
     filters: CohortFilters
     sample_ids: list[str]
@@ -186,3 +202,9 @@ class CohortResponse(BaseModel):
     samples_by_project: list[CategoryCount]
     subjects_by_response: list[CategoryCount]
     subjects_by_sex: list[CategoryCount]
+    response_by_sex: list[CrossTabRow] = Field(
+        description="Cross-tabulation: for each sex, how many subjects responded vs did not."
+    )
+    response_by_project: list[CrossTabRow] = Field(
+        description="Cross-tabulation: for each project, how many subjects responded vs did not."
+    )

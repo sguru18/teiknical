@@ -122,6 +122,26 @@ export interface components {
             sample_type?: ("PBMC" | "WB") | null;
             /** Time From Treatment Start */
             time_from_treatment_start?: number | null;
+            /** Sex */
+            sex?: string | null;
+            /** Proj Id */
+            proj_id?: string | null;
+        };
+        /**
+         * CrossTabRow
+         * @description One row of a response x grouping cross-tabulation.
+         */
+        CrossTabRow: {
+            /** Label */
+            label: string;
+            /** Responders */
+            responders: number;
+            /** Non Responders */
+            non_responders: number;
+            /** Not Recorded */
+            not_recorded: number;
+            /** Total */
+            total: number;
         };
         /** CohortResponse */
         CohortResponse: {
@@ -138,6 +158,10 @@ export interface components {
             subjects_by_response: components["schemas"]["CategoryCount"][];
             /** Subjects By Sex */
             subjects_by_sex: components["schemas"]["CategoryCount"][];
+            /** Response By Sex */
+            response_by_sex: components["schemas"]["CrossTabRow"][];
+            /** Response By Project */
+            response_by_project: components["schemas"]["CrossTabRow"][];
         };
         /** CompareResponse */
         CompareResponse: {
@@ -187,6 +211,8 @@ export interface components {
             sample_types: string[];
             /** Timepoints */
             timepoints: number[];
+            /** Projects */
+            projects: string[];
         };
         /**
          * FrequencyPoint
@@ -399,6 +425,10 @@ export interface operations {
                 sample_type?: "PBMC" | "WB";
                 /** @description Which timepoint to use (baseline=day 0, day7, day14) */
                 aggregation?: "baseline" | "day7" | "day14";
+                /** @description Filter to M or F subjects only */
+                sex?: string | null;
+                /** @description Filter to a single project */
+                proj_id?: string | null;
                 alpha?: number;
             };
             header?: never;

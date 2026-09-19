@@ -44,12 +44,17 @@ export function CompareAnalysis({
   const [sampleType, setSampleType] = useState<string>(
     DEFAULT_COMPARE_PARAMS.sample_type,
   );
+  // Optional subset filters — undefined means "all"
+  const [sex, setSex] = useState<string | undefined>(undefined);
+  const [projId, setProjId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!preset) return;
     setCondition(preset.condition);
     setTreatment(preset.treatment);
     setSampleType(preset.sample_type);
+    setSex(preset.sex ?? undefined);
+    setProjId(preset.proj_id ?? undefined);
   }, [preset, presetKey]);
 
   const [options, setOptions] = useState<FilterOptions | null>(
@@ -73,6 +78,8 @@ export function CompareAnalysis({
       condition,
       treatment,
       sample_type: sampleType,
+      ...(sex ? { sex } : {}),
+      ...(projId ? { proj_id: projId } : {}),
     };
     const cached = peekCached<CompareResponse>("/api/compare", params);
     if (cached) {
@@ -102,7 +109,7 @@ export function CompareAnalysis({
     return () => {
       cancelled = true;
     };
-  }, [aggregation, condition, treatment, sampleType]);
+  }, [aggregation, condition, treatment, sampleType, sex, projId]);
 
   const significant = data?.tests.filter((t) => t.significant) ?? [];
 
@@ -130,7 +137,14 @@ export function CompareAnalysis({
           <FadeIn
             key={`${data.filters.condition}-${data.filters.treatment}-${data.filters.sample_type}-${data.n_subjects}`}
           >
-            {`${data.filters.condition} · ${data.filters.treatment} · ${data.filters.sample_type} · ${data.n_subjects} subjects`}
+            {[
+              data.filters.condition,
+              data.filters.treatment,
+              data.filters.sample_type,
+              data.filters.sex ?? null,
+              data.filters.proj_id ?? null,
+              `${data.n_subjects} subjects`,
+            ].filter(Boolean).join(" · ")}
           </FadeIn>
         )}
       </div>
@@ -157,6 +171,48 @@ export function CompareAnalysis({
           onChange={setSampleType}
           disabled={loading}
         />
+      </div>
+
+      {/* Sex + project subset filters */}
+      <div className="mt-4 flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-[#999]">
+            Sex
+          </span>
+          {[undefined, "M", "F"].map((val) => (
+            <button
+              key={val ?? "all"}
+              onClick={() => setSex(val)}
+              disabled={loading}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                sex === val
+                  ? "border-[#e5341a] bg-[#e5341a] text-white"
+                  : "border-[#e5e0d9] text-[#555] hover:border-[#ccc] hover:text-[#0d0d0d]"
+              }`}
+            >
+              {val ?? "All"}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-[#999]">
+            Project
+          </span>
+          {[undefined, ...(options?.projects ?? [])].map((val) => (
+            <button
+              key={val ?? "all"}
+              onClick={() => setProjId(val)}
+              disabled={loading}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                projId === val
+                  ? "border-[#e5341a] bg-[#e5341a] text-white"
+                  : "border-[#e5e0d9] text-[#555] hover:border-[#ccc] hover:text-[#0d0d0d]"
+              }`}
+            >
+              {val ?? "All"}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">

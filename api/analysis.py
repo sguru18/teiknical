@@ -23,6 +23,8 @@ FREQUENCIES_SQL = """
         sub.treatment,
         s.sample_type,
         sub.response,
+        sub.sex,
+        sub.proj_id,
         sc.population,
         100.0 * sc.count / SUM(sc.count) OVER (PARTITION BY sc.sample_id) AS percentage
     FROM sample_counts sc
@@ -45,6 +47,8 @@ def load_frequencies(
     condition: str | None = None,
     treatment: str | None = None,
     sample_type: str | None = None,
+    sex: str | None = None,
+    proj_id: str | None = None,
 ) -> pd.DataFrame:
     """Long-format percentages for the filtered cohort, responders only.
 
@@ -58,6 +62,8 @@ def load_frequencies(
         ("condition", condition),
         ("treatment", treatment),
         ("sample_type", sample_type),
+        ("sex", sex),
+        ("proj_id", proj_id),
     ):
         if value is not None:
             clauses.append(f"{column} = ?")

@@ -10,6 +10,7 @@ import {
   peekCached,
   type CategoryCount,
   type CohortResponse,
+  type CrossTabRow,
   type FilterOptions,
 } from "@/lib/api";
 import type { ComparePreset, SummaryFilter } from "@/lib/navigation";
@@ -57,6 +58,82 @@ function Breakdown({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function CrossTabTable({
+  title,
+  rows,
+  groupKey,
+  onViewChart,
+}: {
+  title: string;
+  rows: CrossTabRow[];
+  groupKey: "sex" | "proj_id";
+  onViewChart: (filter: { sex?: string; proj_id?: string }) => void;
+}) {
+  const cols = ["Responders", "Non-resp.", "Not rec.", "Total"];
+  return (
+    <div className="flex-1 min-w-[280px] rounded-xl border border-[#e5e0d9] bg-white p-5">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#e5341a]">
+        subjects
+      </p>
+      <h3 className="mt-0.5 font-semibold text-[#0d0d0d]">{title}</h3>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-[#e5e0d9] text-left">
+              <th className="py-1.5 pr-3 text-[10px] font-semibold uppercase tracking-widest text-[#999]">
+                Group
+              </th>
+              {cols.map((c) => (
+                <th
+                  key={c}
+                  className="py-1.5 pr-3 text-right text-[10px] font-semibold uppercase tracking-widest text-[#999]"
+                >
+                  {c}
+                </th>
+              ))}
+              <th className="py-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#999]" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const respPct =
+                row.total > 0
+                  ? ((100 * row.responders) / row.total).toFixed(1)
+                  : "—";
+              return (
+                <tr key={row.label} className="border-b border-[#f0ebe4] last:border-0">
+                  <td className="py-1.5 pr-3 font-medium text-[#333]">{row.label}</td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-[#333]">
+                    {row.responders.toLocaleString()}
+                    <span className="ml-1 text-xs text-[#999]">({respPct}%)</span>
+                  </td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-[#555]">
+                    {row.non_responders.toLocaleString()}
+                  </td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-[#999]">
+                    {row.not_recorded > 0 ? row.not_recorded.toLocaleString() : "—"}
+                  </td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums font-medium text-[#333]">
+                    {row.total.toLocaleString()}
+                  </td>
+                  <td className="py-1.5 text-right">
+                    <button
+                      onClick={() => onViewChart({ [groupKey]: row.label })}
+                      className="rounded-lg border border-[#e5e0d9] px-2 py-0.5 text-xs text-[#555] transition-colors hover:border-[#ccc] hover:text-[#0d0d0d]"
+                    >
+                      Chart →
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -221,19 +298,38 @@ export function CohortBreakdown({
             <>
               <div className="mt-4 flex flex-wrap gap-4">
                 <Breakdown
-                  title="Samples per project"
-                  unit="samples"
-                  counts={data.samples_by_project}
-                />
-                <Breakdown
                   title="Subjects by response"
                   unit="subjects"
                   counts={data.subjects_by_response}
                 />
-                <Breakdown
-                  title="Subjects by sex"
-                  unit="subjects"
-                  counts={data.subjects_by_sex}
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-4">
+                <CrossTabTable
+                  title="Response by sex"
+                  rows={data.response_by_sex}
+                  groupKey="sex"
+                  onViewChart={(filter) =>
+                    onViewChart({
+                      condition,
+                      treatment,
+                      sample_type: sampleType,
+                      ...filter,
+                    })
+                  }
+                />
+                <CrossTabTable
+                  title="Response by project"
+                  rows={data.response_by_project}
+                  groupKey="proj_id"
+                  onViewChart={(filter) =>
+                    onViewChart({
+                      condition,
+                      treatment,
+                      sample_type: sampleType,
+                      ...filter,
+                    })
+                  }
                 />
               </div>
 

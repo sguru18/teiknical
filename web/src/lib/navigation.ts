@@ -10,4 +10,6 @@ export type ComparePreset = {
   condition: string;
   treatment: string;
   sample_type: string;
+  sex?: string;
+  proj_id?: string;
 };
