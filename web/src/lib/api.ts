@@ -98,7 +98,10 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
 type CacheEntry = { promise: Promise<unknown>; value?: unknown };
 const cache = new Map<string, CacheEntry>();
 
-export function peekCached<T>(path: string, params: QueryParams = {}): T | undefined {
+export function peekCached<T>(
+  path: string,
+  params: QueryParams = {},
+): T | undefined {
   return cache.get(requestUrl(path, params))?.value as T | undefined;
 }
 
