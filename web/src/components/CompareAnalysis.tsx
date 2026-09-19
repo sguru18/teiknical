@@ -190,8 +190,33 @@ export function CompareAnalysis({
           shift when data arrives. The skeleton shows while loading. */}
       <div className="mt-6 h-[480px] w-full">
         {(loading || !data) && !error && (
-          <div className="flex h-full w-full items-center justify-center rounded-xl bg-[#f0ebe4] text-sm text-[#999]">
-            Loading…
+          <div className="relative flex h-full w-full flex-col items-center justify-center gap-4 overflow-hidden rounded-xl bg-[#f0ebe4]">
+            {/* animated bar skeleton mimicking the five boxplot columns */}
+            <div className="flex items-end gap-3 h-32 px-8 w-full max-w-sm">
+              {[
+                { h: 0.55, delay: "0s" },
+                { h: 0.75, delay: "0.15s" },
+                { h: 0.45, delay: "0.3s" },
+                { h: 0.85, delay: "0.45s" },
+                { h: 0.6,  delay: "0.6s" },
+              ].map(({ h, delay }, i) => (
+                <div
+                  key={i}
+                  className="flex-1 rounded-sm bg-[#e5341a]/25 animate-pulse"
+                  style={{ height: `${h * 100}%`, animationDelay: delay }}
+                />
+              ))}
+            </div>
+            <div className="flex items-center gap-1.5">
+              {["0s", "0.2s", "0.4s"].map((delay, i) => (
+                <span
+                  key={i}
+                  className="inline-block h-1.5 w-1.5 rounded-full bg-[#e5341a]/60 animate-pulse"
+                  style={{ animationDelay: delay }}
+                />
+              ))}
+              <span className="ml-1.5 text-xs font-medium tracking-widest uppercase text-[#bbb]">Calculating</span>
+            </div>
           </div>
         )}
         {data && !loading && isEmpty && (

@@ -135,15 +135,15 @@ export async function prefetchDefaults(): Promise<void> {
 
   await firstPage;
 
-  // Compare is the expensive endpoint (pandas + Mann-Whitney). Tab 1 goes
-  // first; then warm the four treated arms one at a time. healthy/none waits.
-  void (async () => {
-    for (const combo of PREFETCH_COMPARE_COMBOS) {
-      await cachedFetch<CompareResponse>("/api/compare", {
+  // Compare is the expensive endpoint (pandas + Mann-Whitney). Fire all four
+  // treated arms in parallel after the summary first page is ready.
+  void Promise.all(
+    PREFETCH_COMPARE_COMBOS.map((combo) =>
+      cachedFetch<CompareResponse>("/api/compare", {
         ...combo,
         sample_type: DEFAULT_COMPARE_PARAMS.sample_type,
         aggregation: DEFAULT_COMPARE_PARAMS.aggregation,
-      });
-    }
-  })();
+      }),
+    ),
+  );
 }
