@@ -108,14 +108,26 @@ export function cachedFetch<T>(
 ): Promise<T> {
   const key = requestUrl(path, params);
   const existing = cache.get(key);
-  if (existing) return existing.promise as Promise<T>;
+  if (existing) {
+    console.debug(`[teiknical] cache HIT  ${key}`);
+    return existing.promise as Promise<T>;
+  }
+
+  const t0 = performance.now();
+  console.debug(`[teiknical] fetch START ${key}`);
 
   const promise = fetchJson<T>(path, params).then((value) => {
+    const ms = (performance.now() - t0).toFixed(0);
+    console.debug(`[teiknical] fetch DONE  ${key} (${ms}ms)`);
     const entry = cache.get(key);
     if (entry) entry.value = value;
     return value;
   });
-  promise.catch(() => cache.delete(key));
+  promise.catch((e) => {
+    const ms = (performance.now() - t0).toFixed(0);
+    console.warn(`[teiknical] fetch ERROR ${key} (${ms}ms)`, e);
+    cache.delete(key);
+  });
   cache.set(key, { promise });
   return promise;
 }
@@ -135,15 +147,16 @@ export async function prefetchDefaults(): Promise<void> {
 
   await firstPage;
 
-  // Compare is the expensive endpoint (pandas + Mann-Whitney). Fire all four
-  // treated arms in parallel after the summary first page is ready.
-  void Promise.all(
-    PREFETCH_COMPARE_COMBOS.map((combo) =>
-      cachedFetch<CompareResponse>("/api/compare", {
+  // Compare is the expensive endpoint (pandas + Shapiro-Wilk + Mann-Whitney).
+  // Sequential — the backend is single-worker so parallel requests queue anyway
+  // and the contention makes each one slower.
+  void (async () => {
+    for (const combo of PREFETCH_COMPARE_COMBOS) {
+      await cachedFetch<CompareResponse>("/api/compare", {
         ...combo,
         sample_type: DEFAULT_COMPARE_PARAMS.sample_type,
         aggregation: DEFAULT_COMPARE_PARAMS.aggregation,
-      }),
-    ),
-  );
+      });
+    }
+  })();
 }
