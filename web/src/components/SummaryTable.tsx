@@ -8,6 +8,7 @@ export function SummaryTable({ rows }: { rows: SummaryRow[] }) {
   );
 
   return (
+    <div className="overflow-x-auto">
     <table className="mt-4 w-full border-collapse text-sm">
       <thead>
         <tr className="border-b border-[#e5e0d9] text-left">
@@ -36,22 +37,23 @@ export function SummaryTable({ rows }: { rows: SummaryRow[] }) {
               shadedSamples.has(row.sample) ? "bg-[#f9f6f2]" : undefined
             }
           >
-            <td className="py-1.5 pr-4 font-mono text-xs text-[#666]">
+            <td className="py-1.5 pr-4 whitespace-nowrap font-mono text-xs text-[#666]">
               {row.sample}
             </td>
-            <td className="py-1.5 pr-4 tabular-nums text-[#333]">
+            <td className="py-1.5 pr-4 whitespace-nowrap tabular-nums text-[#333]">
               {row.total_count.toLocaleString()}
             </td>
-            <td className="py-1.5 pr-4 text-[#333]">{row.population}</td>
-            <td className="py-1.5 pr-4 tabular-nums text-[#333]">
+            <td className="py-1.5 pr-4 whitespace-nowrap text-[#333]">{row.population}</td>
+            <td className="py-1.5 pr-4 whitespace-nowrap tabular-nums text-[#333]">
               {row.count.toLocaleString()}
             </td>
-            <td className="py-1.5 tabular-nums text-[#333]">
+            <td className="py-1.5 whitespace-nowrap tabular-nums text-[#333]">
               {row.percentage.toFixed(2)}%
             </td>
           </tr>
         ))}
       </tbody>
     </table>
+    </div>
   );
 }

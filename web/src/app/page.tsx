@@ -38,7 +38,8 @@ export default function Home() {
     <main className="mx-auto w-full max-w-7xl px-8 pb-16">
       {/* Tab bar — white card on cream bg, matching Teiko's nav style */}
       <div className="mt-8 bg-white rounded-xl border border-[#e5e0d9] px-2">
-        <div className="flex items-center">
+        {/* overflow-x-auto lets long tab labels scroll on narrow screens */}
+        <div className="flex items-center overflow-x-auto scrollbar-none">
           <span className="px-4 text-sm font-bold text-[#e5341a] shrink-0">
             Teiknical
           </span>
@@ -47,7 +48,7 @@ export default function Home() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`relative px-5 py-4 text-sm font-medium transition-colors focus:outline-none ${
+              className={`relative shrink-0 px-4 sm:px-5 py-4 text-sm font-medium transition-colors focus:outline-none ${
                 activeTab === tab.id
                   ? "text-[#e5341a]"
                   : "text-[#555] hover:text-[#0d0d0d]"
