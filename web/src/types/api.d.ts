@@ -162,7 +162,7 @@ export interface components {
              * Aggregation
              * @enum {string}
              */
-            aggregation: "baseline" | "subject_mean" | "all_samples";
+            aggregation: "baseline" | "day7" | "day14";
             /**
              * Aggregation Note
              * @description Plain-language statement of how repeated measures per subject were handled, so a reader of the chart knows what each point represents.
@@ -262,6 +262,26 @@ export interface components {
              * @description Welch's t-test p-value, reported as a sensitivity check. Agreement with the rank-based test is evidence the conclusion does not depend on which test was chosen.
              */
             p_value_welch: number;
+            /**
+             * Shapiro P Responders
+             * @description Shapiro-Wilk p-value for the responder group. p < 0.05 means normality is rejected for that group.
+             */
+            shapiro_p_responders: number;
+            /**
+             * Shapiro P Non Responders
+             * @description Shapiro-Wilk p-value for the non-responder group. p < 0.05 means normality is rejected for that group.
+             */
+            shapiro_p_non_responders: number;
+            /**
+             * Normality Rejected
+             * @description True if Shapiro-Wilk rejects normality (p < 0.05) in either group. When true, MWU is the appropriate test over a t-test.
+             */
+            normality_rejected: boolean;
+            /**
+             * P Value Welch
+             * @description Welch t-test p-value. Only computed when normality_rejected is False. Null when normality is rejected.
+             */
+            p_value_welch: number | null;
         };
         /** SummaryResponse */
         SummaryResponse: {
@@ -377,8 +397,8 @@ export interface operations {
                 condition?: string;
                 treatment?: string;
                 sample_type?: "PBMC" | "WB";
-                /** @description How to collapse each subject's repeated measures */
-                aggregation?: "baseline" | "subject_mean" | "all_samples";
+                /** @description Which timepoint to use (baseline=day 0, day7, day14) */
+                aggregation?: "baseline" | "day7" | "day14";
                 alpha?: number;
             };
             header?: never;

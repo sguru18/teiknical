@@ -12,8 +12,8 @@ import {
   type CohortResponse,
   type FilterOptions,
 } from "@/lib/api";
+import type { ComparePreset, SummaryFilter } from "@/lib/navigation";
 
-// Matches Teiko's "Fresh vs fixed" / "Fixed over time" stat card style
 function Breakdown({
   title,
   unit,
@@ -61,7 +61,22 @@ function Breakdown({
   );
 }
 
-export function CohortBreakdown() {
+function cohortLabel(
+  condition: string,
+  treatment: string,
+  sampleType: string,
+  timepoint: string,
+) {
+  return `${condition} · ${treatment} · ${sampleType} · day ${timepoint}`;
+}
+
+export function CohortBreakdown({
+  onViewFrequencies,
+  onViewChart,
+}: {
+  onViewFrequencies: (filter: SummaryFilter) => void;
+  onViewChart: (preset: ComparePreset) => void;
+}) {
   const [condition, setCondition] = useState<string>(
     DEFAULT_COHORT_PARAMS.condition,
   );
@@ -71,7 +86,7 @@ export function CohortBreakdown() {
   const [sampleType, setSampleType] = useState<string>(
     DEFAULT_COHORT_PARAMS.sample_type,
   );
-  const [timepoint, setTimepoint] = useState(
+  const [timepoint, setTimepoint] = useState<string>(
     String(DEFAULT_COHORT_PARAMS.time_from_treatment_start),
   );
 
@@ -93,7 +108,7 @@ export function CohortBreakdown() {
       condition,
       treatment,
       sample_type: sampleType,
-      time_from_treatment_start: timepoint,
+      time_from_treatment_start: Number(timepoint),
     };
     const cached = peekCached<CohortResponse>("/api/cohort", params);
     if (cached) {
@@ -123,9 +138,11 @@ export function CohortBreakdown() {
     };
   }, [condition, treatment, sampleType, timepoint]);
 
+  const label = cohortLabel(condition, treatment, sampleType, timepoint);
+  const canNavigate = Boolean(data && data.n_samples > 0);
+
   return (
     <div>
-      {/* Teiko-style eyebrow + heading */}
       <p className="text-[10px] font-semibold uppercase tracking-widest text-[#e5341a]">
         Cohort breakdown
       </p>
@@ -133,8 +150,8 @@ export function CohortBreakdown() {
         Sample composition
       </h2>
       <p className="mt-1 text-sm text-[#666]">
-        Samples matching a single treatment arm at one timepoint, broken down
-        by project, response and sex.
+        Samples matching a single treatment arm at one timepoint, broken down by
+        project, response and sex.
       </p>
 
       <div className="mt-6 flex flex-wrap items-end gap-6">
@@ -172,9 +189,7 @@ export function CohortBreakdown() {
         </FadeIn>
       )}
 
-      {!data && !error && (
-        <p className="mt-6 text-sm text-[#999]">Loading…</p>
-      )}
+      {!data && !error && <p className="mt-6 text-sm text-[#999]">Loading…</p>}
 
       {data && (
         <FadeIn
@@ -183,7 +198,6 @@ export function CohortBreakdown() {
             loading ? "opacity-50 transition-opacity" : "transition-opacity"
           }
         >
-          {/* Stat summary — matching their "6,000+ specimens processed" cards */}
           <div className="mt-6 flex gap-4">
             <div className="rounded-xl border border-[#e5e0d9] bg-white px-5 py-4">
               <p className="text-2xl font-bold text-[#0d0d0d]">
@@ -200,7 +214,7 @@ export function CohortBreakdown() {
           </div>
 
           {data.n_samples === 0 ? (
-            <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <p className="mt-4 rounded-lg border border-[#e5e0d9] bg-white p-3 text-sm text-[#555]">
               No samples match this combination.
             </p>
           ) : (
@@ -224,14 +238,45 @@ export function CohortBreakdown() {
               </div>
 
               <details className="mt-6">
-                <summary className="cursor-pointer text-sm text-[#555] hover:text-[#0d0d0d] transition-colors">
-                  Matching sample IDs (
-                  {data.sample_ids.length.toLocaleString()})
+                <summary className="cursor-pointer text-sm text-[#555] transition-colors hover:text-[#0d0d0d]">
+                  Matching sample IDs ({data.sample_ids.length.toLocaleString()}
+                  )
                 </summary>
                 <p className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-[#e5e0d9] bg-[#f9f6f2] p-3 font-mono text-xs leading-5 break-all text-[#666]">
                   {data.sample_ids.join(", ")}
                 </p>
               </details>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={!canNavigate}
+                  onClick={() =>
+                    onViewFrequencies({
+                      sampleIds: data.sample_ids,
+                      label,
+                    })
+                  }
+                  className="rounded-lg border border-[#e5e0d9] bg-white px-3 py-1.5 text-sm text-[#333] transition-colors hover:border-[#ccc] hover:bg-[#f9f6f2] disabled:opacity-40"
+                >
+                  View frequencies · {condition} / {treatment} / {sampleType}
+                </button>
+                <button
+                  type="button"
+                  disabled={!canNavigate}
+                  onClick={() =>
+                    onViewChart({
+                      condition,
+                      treatment,
+                      sample_type: sampleType,
+                    })
+                  }
+                  className="rounded-lg border border-[#e5e0d9] bg-white px-3 py-1.5 text-sm text-[#333] transition-colors hover:border-[#ccc] hover:bg-[#f9f6f2] disabled:opacity-40"
+                >
+                  View responder chart · {condition} / {treatment} /{" "}
+                  {sampleType}
+                </button>
+              </div>
             </>
           )}
         </FadeIn>

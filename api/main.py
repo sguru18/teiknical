@@ -24,6 +24,7 @@ from api.models import (
     FilterOptions,
     FrequencyPoint,
     SampleType,
+    SummaryRequest,
     SummaryResponse,
     SummaryRow,
 )
@@ -51,20 +52,13 @@ SUMMARY_SQL = """
 """
 
 
-@app.get("/api/summary", response_model=SummaryResponse, tags=["Part 2"])
-def get_summary(
-    conn: sqlite3.Connection = Depends(get_connection),
-    sample: str | None = Query(
-        default=None, description="Restrict to a single sample id"
-    ),
-    limit: int | None = Query(
-        default=None, ge=1, description="Page size; omit to return every row"
-    ),
-    offset: int = Query(default=0, ge=0),
-) -> (
-    SummaryResponse
-):  # FastAPI will serialize the response from this endpoint according to the definition in models.py, actually very cool
-    """Part 2: relative frequency of each population within each sample."""
+def build_summary(
+    conn: sqlite3.Connection,
+    sample: list[str] | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> SummaryResponse:
+    """Relative frequencies, optionally restricted to a list of sample ids."""
     sql, params = SUMMARY_SQL, []
 
     populations = [
@@ -73,41 +67,107 @@ def get_summary(
             "SELECT DISTINCT population FROM sample_counts ORDER BY population"
         )
     ]
-    n_samples = conn.execute("SELECT COUNT(*) AS n FROM samples").fetchone()["n"]
 
-    if sample is not None:
-        sql = f"SELECT * FROM ({sql}) WHERE sample = ?"
-        params.append(sample)
+    # Deduplicate while preserving order so a long cohort list is safe to pass.
+    sample_ids = list(dict.fromkeys(sample)) if sample else []
+
+    if sample_ids:
+        placeholders = ",".join("?" * len(sample_ids))
+        n_samples = conn.execute(
+            f"SELECT COUNT(*) AS n FROM samples WHERE sample_id IN ({placeholders})",
+            sample_ids,
+        ).fetchone()["n"]
         if limit is not None:
-            sql = f"{sql} LIMIT ? OFFSET ?"
-            params.extend([limit, offset])
-    elif limit is not None:
-        # Page by sample first so the window function only runs on this page,
-        # not all 52,500 count rows. Five populations per sample, and the
-        # client always asks for a multiple of that, so row offset maps cleanly.
-        n_pops = max(len(populations), 1)
-        sql = """
-            WITH page AS (
-                SELECT sample_id FROM samples
-                ORDER BY sample_id
-                LIMIT ? OFFSET ?
-            )
-            SELECT
-                sc.sample_id AS sample,
-                sc.population,
-                sc.count,
-                SUM(sc.count) OVER (PARTITION BY sc.sample_id) AS total_count,
-                100.0 * sc.count / SUM(sc.count) OVER (PARTITION BY sc.sample_id)
-                    AS percentage
-            FROM sample_counts sc
-            JOIN page ON page.sample_id = sc.sample_id
-            ORDER BY sc.sample_id, sc.population
-        """
-        params = [(limit + n_pops - 1) // n_pops, offset // n_pops]
+            # Page by sample within the filtered set, same as the unfiltered path,
+            # so a sample's five population rows stay on one page.
+            n_pops = max(len(populations), 1)
+            sql = f"""
+                WITH page AS (
+                    SELECT sample_id FROM samples
+                    WHERE sample_id IN ({placeholders})
+                    ORDER BY sample_id
+                    LIMIT ? OFFSET ?
+                )
+                SELECT
+                    sc.sample_id AS sample,
+                    sc.population,
+                    sc.count,
+                    SUM(sc.count) OVER (PARTITION BY sc.sample_id) AS total_count,
+                    100.0 * sc.count / SUM(sc.count) OVER (PARTITION BY sc.sample_id)
+                        AS percentage
+                FROM sample_counts sc
+                JOIN page ON page.sample_id = sc.sample_id
+                ORDER BY sc.sample_id, sc.population
+            """
+            params = [
+                *sample_ids,
+                (limit + n_pops - 1) // n_pops,
+                offset // n_pops,
+            ]
+        else:
+            # Filter outside the window so total_count stays the full sample total.
+            sql = f"SELECT * FROM ({sql}) WHERE sample IN ({placeholders})"
+            params.extend(sample_ids)
+    else:
+        n_samples = conn.execute("SELECT COUNT(*) AS n FROM samples").fetchone()["n"]
+        if limit is not None:
+            # Page by sample first so the window function only runs on this page,
+            # not all 52,500 count rows. Five populations per sample, and the
+            # client always asks for a multiple of that, so row offset maps cleanly.
+            n_pops = max(len(populations), 1)
+            sql = """
+                WITH page AS (
+                    SELECT sample_id FROM samples
+                    ORDER BY sample_id
+                    LIMIT ? OFFSET ?
+                )
+                SELECT
+                    sc.sample_id AS sample,
+                    sc.population,
+                    sc.count,
+                    SUM(sc.count) OVER (PARTITION BY sc.sample_id) AS total_count,
+                    100.0 * sc.count / SUM(sc.count) OVER (PARTITION BY sc.sample_id)
+                        AS percentage
+                FROM sample_counts sc
+                JOIN page ON page.sample_id = sc.sample_id
+                ORDER BY sc.sample_id, sc.population
+            """
+            params = [(limit + n_pops - 1) // n_pops, offset // n_pops]
 
     rows = [SummaryRow(**dict(r)) for r in conn.execute(sql, params)]
-
     return SummaryResponse(rows=rows, n_samples=n_samples, populations=populations)
+
+
+@app.get("/api/summary", response_model=SummaryResponse, tags=["Part 2"])
+def get_summary(
+    conn: sqlite3.Connection = Depends(get_connection),
+    sample: list[str] | None = Query(
+        default=None,
+        description=(
+            "Restrict to these sample ids. Repeat the query param "
+            "(?sample=a&sample=b). A single id is still a one-element list."
+        ),
+    ),
+    limit: int | None = Query(
+        default=None, ge=1, description="Page size; omit to return every row"
+    ),
+    offset: int = Query(default=0, ge=0),
+) -> SummaryResponse:
+    """Part 2: relative frequency of each population within each sample."""
+    return build_summary(conn, sample=sample, limit=limit, offset=offset)
+
+
+@app.post("/api/summary", response_model=SummaryResponse, tags=["Part 2"])
+def post_summary(
+    body: SummaryRequest,
+    conn: sqlite3.Connection = Depends(get_connection),
+) -> SummaryResponse:
+    """Same as GET /api/summary, but sample ids go in the JSON body.
+
+    Use this for large cohorts (hundreds of ids) where a query string would
+    exceed typical URL length limits.
+    """
+    return build_summary(conn, sample=body.sample, limit=body.limit, offset=body.offset)
 
 
 @app.get("/api/filters", response_model=FilterOptions, tags=["Shared"])
@@ -136,7 +196,7 @@ def get_compare(
     sample_type: SampleType = Query(default="PBMC"),
     aggregation: Aggregation = Query(
         default="baseline",
-        description="How to collapse each subject's repeated measures",
+        description="Which timepoint to use (baseline=day 0, day7, day14)",
     ),
     alpha: float = Query(default=0.05, gt=0, lt=1),
 ) -> CompareResponse:
@@ -166,7 +226,7 @@ def get_compare(
             condition=condition,
             treatment=treatment,
             sample_type=sample_type,
-            time_from_treatment_start=0 if aggregation == "baseline" else None,
+            time_from_treatment_start={"baseline": 0, "day7": 7, "day14": 14}[aggregation],
         ),
         n_samples=int(frame["sample"].nunique()),
         n_subjects=int(frame["subject"].nunique()),
@@ -254,3 +314,13 @@ def get_cohort(
         subjects_by_response=subject_counts("response"),
         subjects_by_sex=subject_counts("sex"),
     )
+
+
+FINAL_QUESTION_SQL = f"""
+    SELECT AVG(sc.count) as "avg_b_cells"
+    FROM subjects sub
+    INNER JOIN samples s on s.sbj_id = sub.sbj_id
+    INNER JOIN sample_counts sc on sc.sample_id = s.sample_id
+    WHERE sub.sex = "M" and sub.condition = "melanoma" and s.time_from_treatment_start = 0 and sub.response = "yes" and sc.population = "b_cell"
+
+"""

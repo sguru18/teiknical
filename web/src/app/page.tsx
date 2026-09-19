@@ -7,6 +7,7 @@ import { CompareAnalysis } from "@/components/CompareAnalysis";
 import { FrequencySummary } from "@/components/FrequencySummary";
 import { loadPlotly } from "@/components/FrequencyBoxPlot";
 import { prefetchDefaults } from "@/lib/api";
+import type { ComparePreset, SummaryFilter } from "@/lib/navigation";
 
 type Tab = "summary" | "compare" | "cohort";
 
@@ -19,6 +20,14 @@ const TABS: { id: Tab; label: string }[] = [
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("summary");
   const [warmCompare, setWarmCompare] = useState(false);
+  const [summaryFilter, setSummaryFilter] = useState<SummaryFilter | null>(
+    null,
+  );
+  // Bump nonce so re-clicking the same cohort still re-applies the preset.
+  const [comparePreset, setComparePreset] = useState<{
+    value: ComparePreset;
+    nonce: number;
+  } | null>(null);
 
   useEffect(() => {
     void loadPlotly();
@@ -26,15 +35,13 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-8 pb-16">
+    <main className="mx-auto w-full max-w-7xl px-8 pb-16">
       {/* Tab bar — white card on cream bg, matching Teiko's nav style */}
       <div className="mt-8 bg-white rounded-xl border border-[#e5e0d9] px-2">
         <div className="flex items-center">
-          {/* Wordmark — sits flush left, outside the tab buttons */}
           <span className="px-4 text-sm font-bold text-[#e5341a] shrink-0">
             Teiknical
           </span>
-          {/* Thin separator between wordmark and tabs */}
           <div className="w-px h-5 bg-[#e5e0d9] shrink-0" />
           {TABS.map((tab) => (
             <button
@@ -47,7 +54,6 @@ export default function Home() {
               }`}
             >
               {tab.label}
-              {/* Teiko-red active underline */}
               <span
                 className={`absolute inset-x-2 bottom-0 h-0.5 rounded-full transition-all ${
                   activeTab === tab.id ? "bg-[#e5341a]" : "bg-transparent"
@@ -58,12 +64,14 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Content card — white on cream, matching their card blocks */}
       {/* Keep compare mounted (invisible, not display:none) so Plotly can
-          measure a real width and draw while the summary tab is still open. */}
+          measure a real width and draw while another tab is open. */}
       <div className="relative mt-4 bg-white rounded-xl border border-[#e5e0d9] px-8 py-8">
         <div className={activeTab === "summary" ? undefined : "hidden"}>
-          <FrequencySummary />
+          <FrequencySummary
+            filter={summaryFilter}
+            onClearFilter={() => setSummaryFilter(null)}
+          />
         </div>
         {warmCompare && (
           <div
@@ -74,11 +82,28 @@ export default function Home() {
             }
             aria-hidden={activeTab !== "compare"}
           >
-            <CompareAnalysis active={activeTab === "compare"} />
+            <CompareAnalysis
+              active={activeTab === "compare"}
+              preset={comparePreset?.value ?? null}
+              presetKey={comparePreset?.nonce ?? 0}
+            />
           </div>
         )}
         <div className={activeTab === "cohort" ? undefined : "hidden"}>
-          <CohortBreakdown />
+          <CohortBreakdown
+            onViewFrequencies={(filter) => {
+              setSummaryFilter(filter);
+              setActiveTab("summary");
+            }}
+            onViewChart={(preset) => {
+              setComparePreset((prev) => ({
+                value: preset,
+                nonce: (prev?.nonce ?? 0) + 1,
+              }));
+              setWarmCompare(true);
+              setActiveTab("compare");
+            }}
+          />
         </div>
       </div>
     </main>

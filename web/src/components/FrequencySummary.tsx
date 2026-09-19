@@ -3,41 +3,70 @@
 import { useEffect, useState } from "react";
 
 import { FadeIn } from "@/components/FadeIn";
+import { SummaryTable } from "@/components/SummaryTable";
 import {
   cachedFetch,
   peekCached,
+  postJson,
   SUMMARY_PAGE_SIZE,
   type SummaryResponse,
 } from "@/lib/api";
+import type { SummaryFilter } from "@/lib/navigation";
 
-function summaryParams(page: number) {
+function unfilteredParams(page: number) {
   return { limit: SUMMARY_PAGE_SIZE, offset: page * SUMMARY_PAGE_SIZE };
 }
 
-export function FrequencySummary() {
-  const [data, setData] = useState<SummaryResponse | null>(
-    () => peekCached("/api/summary", summaryParams(0)) ?? null,
-  );
+export function FrequencySummary({
+  filter,
+  onClearFilter,
+}: {
+  filter: SummaryFilter | null;
+  onClearFilter: () => void;
+}) {
+  const [data, setData] = useState<SummaryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   // Held as a string so the field can be empty or mid-edit without the table
   // jumping on every keystroke. Committed on blur or Enter.
   const [pageInput, setPageInput] = useState("1");
 
+  // New cohort filter starts at page 1.
   useEffect(() => {
-    const cached = peekCached<SummaryResponse>(
-      "/api/summary",
-      summaryParams(page),
-    );
-    if (cached) {
-      setData(cached);
-      setError(null);
-    } else {
-      setError(null);
+    setPage(0);
+    setPageInput("1");
+  }, [filter]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setError(null);
+
+    if (filter) {
+      // POST keeps hundreds of sample ids out of the URL. Same endpoint and
+      // pagination as the unfiltered table.
+      postJson<SummaryResponse>("/api/summary", {
+        sample: filter.sampleIds,
+        limit: SUMMARY_PAGE_SIZE,
+        offset: page * SUMMARY_PAGE_SIZE,
+      })
+        .then((next) => {
+          if (!cancelled) setData(next);
+        })
+        .catch((e: Error) => {
+          if (!cancelled) setError(e.message);
+        });
+      return () => {
+        cancelled = true;
+      };
     }
 
-    let cancelled = false;
-    cachedFetch<SummaryResponse>("/api/summary", summaryParams(page))
+    const params = unfilteredParams(page);
+    const cached = peekCached<SummaryResponse>("/api/summary", params);
+    if (cached) {
+      setData(cached);
+    }
+
+    cachedFetch<SummaryResponse>("/api/summary", params)
       .then((next) => {
         if (!cancelled) setData(next);
       })
@@ -45,26 +74,19 @@ export function FrequencySummary() {
         if (!cancelled) setError(e.message);
       });
 
-    void cachedFetch<SummaryResponse>("/api/summary", summaryParams(page + 1));
+    void cachedFetch<SummaryResponse>("/api/summary", unfilteredParams(page + 1));
     if (page > 0) {
-      void cachedFetch<SummaryResponse>("/api/summary", summaryParams(page - 1));
+      void cachedFetch<SummaryResponse>("/api/summary", unfilteredParams(page - 1));
     }
 
     return () => {
       cancelled = true;
     };
-  }, [page]);
+  }, [page, filter]);
 
   // Five rows per sample, so total rows is samples * populations.
   const totalRows = data ? data.n_samples * data.populations.length : 0;
   const lastPage = Math.max(0, Math.ceil(totalRows / SUMMARY_PAGE_SIZE) - 1);
-
-  // Shade alternate samples so the rows belonging to one sample read as a block.
-  const shadedSamples = new Set(
-    [...new Set(data?.rows.map((row) => row.sample))].filter(
-      (_, index) => index % 2 === 1,
-    ),
-  );
 
   function goToPage(next: number) {
     const clamped = Math.min(Math.max(next, 0), lastPage);
@@ -79,7 +101,6 @@ export function FrequencySummary() {
 
   return (
     <div>
-      {/* Teiko-style eyebrow + heading */}
       <p className="text-[10px] font-semibold uppercase tracking-widest text-[#e5341a]">
         Population frequencies
       </p>
@@ -89,6 +110,28 @@ export function FrequencySummary() {
       <p className="mt-1 text-sm text-[#666]">
         Relative frequency of each immune cell population within each sample.
       </p>
+
+      {filter && (
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-[#e5e0d9] bg-[#f9f6f2] px-3 py-2 text-sm">
+          <span className="text-[#555]">
+            Showing cohort:{" "}
+            <span className="font-medium text-[#0d0d0d]">{filter.label}</span>
+            {data && (
+              <span className="text-[#999]">
+                {" "}
+                · {data.n_samples.toLocaleString()} samples
+              </span>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={onClearFilter}
+            className="rounded-lg border border-[#e5e0d9] bg-white px-2.5 py-1 text-xs font-medium text-[#333] transition-colors hover:border-[#ccc]"
+          >
+            Reset to full summary
+          </button>
+        </div>
+      )}
 
       {error && (
         <FadeIn>
@@ -103,54 +146,10 @@ export function FrequencySummary() {
       )}
 
       {data && (
-        <FadeIn>
-          <table className="mt-6 w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-[#e5e0d9] text-left">
-                <th className="py-2 pr-4 text-[10px] font-semibold uppercase tracking-widest text-[#999]">
-                  sample
-                </th>
-                <th className="py-2 pr-4 text-[10px] font-semibold uppercase tracking-widest text-[#999]">
-                  total count
-                </th>
-                <th className="py-2 pr-4 text-[10px] font-semibold uppercase tracking-widest text-[#999]">
-                  population
-                </th>
-                <th className="py-2 pr-4 text-[10px] font-semibold uppercase tracking-widest text-[#999]">
-                  count
-                </th>
-                <th className="py-2 text-[10px] font-semibold uppercase tracking-widest text-[#999]">
-                  percentage
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.rows.map((row) => (
-                <tr
-                  key={`${row.sample}-${row.population}`}
-                  className={
-                    shadedSamples.has(row.sample)
-                      ? "bg-[#f9f6f2]"
-                      : undefined
-                  }
-                >
-                  <td className="py-1.5 pr-4 font-mono text-xs text-[#666]">
-                    {row.sample}
-                  </td>
-                  <td className="py-1.5 pr-4 tabular-nums text-[#333]">
-                    {row.total_count.toLocaleString()}
-                  </td>
-                  <td className="py-1.5 pr-4 text-[#333]">{row.population}</td>
-                  <td className="py-1.5 pr-4 tabular-nums text-[#333]">
-                    {row.count.toLocaleString()}
-                  </td>
-                  <td className="py-1.5 tabular-nums text-[#333]">
-                    {row.percentage.toFixed(2)}%
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <FadeIn key={filter ? filter.label : "all"}>
+          <div className="mt-6">
+            <SummaryTable rows={data.rows} />
+          </div>
 
           <div className="mt-4 flex items-center gap-3 text-sm">
             <button

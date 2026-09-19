@@ -14,7 +14,10 @@ export type CategoryCount = components["schemas"]["CategoryCount"];
 // schemas, so derive it from the field that uses it.
 export type Aggregation = CompareResponse["aggregation"];
 
-export type QueryParams = Record<string, string | number | undefined>;
+export type QueryParams = Record<
+  string,
+  string | number | string[] | undefined
+>;
 
 export const DEFAULT_COMPARE_PARAMS = {
   condition: "melanoma",
@@ -44,7 +47,13 @@ function requestUrl(path: string, params: QueryParams = {}): string {
   const query = new URLSearchParams();
   for (const key of Object.keys(params).sort()) {
     const value = params[key];
-    if (value !== undefined) query.set(key, String(value));
+    if (value === undefined) continue;
+    if (Array.isArray(value)) {
+      // FastAPI list query params: ?sample=a&sample=b
+      for (const item of value) query.append(key, String(item));
+    } else {
+      query.set(key, String(value));
+    }
   }
   const suffix = query.toString() ? `?${query}` : "";
   return `${path}${suffix}`;
@@ -57,6 +66,23 @@ export async function fetchJson<T>(
   params: QueryParams = {},
 ): Promise<T> {
   const res = await fetch(requestUrl(path, params));
+
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${detail}`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+// POST variant for large sample-id lists (cohort pull). GET query strings
+// hit URL length limits around a few hundred ids.
+export async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 
   if (!res.ok) {
     const detail = await res.text();

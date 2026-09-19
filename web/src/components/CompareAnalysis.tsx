@@ -13,14 +13,25 @@ import {
   type CompareResponse,
   type FilterOptions,
 } from "@/lib/api";
+import type { ComparePreset } from "@/lib/navigation";
 
 const AGGREGATION_LABELS: Record<Aggregation, string> = {
-  baseline: "Baseline samples only",
-  subject_mean: "Mean across timepoints",
-  all_samples: "All samples (not independent)",
+  baseline: "Baseline (day 0)",
+  day7: "Day 7",
+  day14: "Day 14",
 };
 
-export function CompareAnalysis({ active = true }: { active?: boolean }) {
+export function CompareAnalysis({
+  active = true,
+  preset = null,
+  presetKey = 0,
+}: {
+  active?: boolean;
+  /** When set from the cohort tab, sync the dropdowns to this arm. */
+  preset?: ComparePreset | null;
+  /** Bumped on each cohort navigate so the same arm can be re-applied. */
+  presetKey?: number;
+}) {
   const [aggregation, setAggregation] = useState<Aggregation>(
     DEFAULT_COMPARE_PARAMS.aggregation,
   );
@@ -34,6 +45,13 @@ export function CompareAnalysis({ active = true }: { active?: boolean }) {
     DEFAULT_COMPARE_PARAMS.sample_type,
   );
 
+  useEffect(() => {
+    if (!preset) return;
+    setCondition(preset.condition);
+    setTreatment(preset.treatment);
+    setSampleType(preset.sample_type);
+  }, [preset, presetKey]);
+
   const [options, setOptions] = useState<FilterOptions | null>(
     () => peekCached("/api/filters") ?? null,
   );
@@ -44,7 +62,9 @@ export function CompareAnalysis({ active = true }: { active?: boolean }) {
   const [loading, setLoading] = useState(() => data === null);
 
   useEffect(() => {
-    cachedFetch<FilterOptions>("/api/filters").then(setOptions).catch(() => {});
+    cachedFetch<FilterOptions>("/api/filters")
+      .then(setOptions)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -85,9 +105,15 @@ export function CompareAnalysis({ active = true }: { active?: boolean }) {
   }, [aggregation, condition, treatment, sampleType]);
 
   const significant = data?.tests.filter((t) => t.significant) ?? [];
+
+  /** Format a p-value: scientific notation when < 0.0001, fixed otherwise. */
+  const fmtP = (p: number) =>
+    isNaN(p) ? "—" : p < 0.0001 ? p.toExponential(2) : p.toFixed(4);
   const isEmpty =
     data !== null &&
-    (data.n_samples === 0 || data.points.length === 0 || data.tests.length === 0);
+    (data.n_samples === 0 ||
+      data.points.length === 0 ||
+      data.tests.length === 0);
 
   return (
     <div>
@@ -135,7 +161,7 @@ export function CompareAnalysis({ active = true }: { active?: boolean }) {
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className="text-[10px] font-semibold uppercase tracking-widest text-[#999]">
-          Repeated measures
+          Timepoint
         </span>
         {(Object.keys(AGGREGATION_LABELS) as Aggregation[]).map((key) => (
           <button
@@ -169,7 +195,7 @@ export function CompareAnalysis({ active = true }: { active?: boolean }) {
           </div>
         )}
         {data && !loading && isEmpty && (
-          <div className="flex h-full w-full items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-6 text-center text-sm text-amber-800">
+          <div className="flex h-full w-full items-center justify-center rounded-xl border border-[#e5e0d9] bg-white px-6 text-center text-sm text-[#555]">
             No samples match this combination, or none of the matching subjects
             have a recorded response. Healthy controls are untreated and have no
             response, so they cannot be compared.
@@ -196,86 +222,102 @@ export function CompareAnalysis({ active = true }: { active?: boolean }) {
             <p className="text-[10px] font-semibold uppercase tracking-widest text-[#e5341a]">
               Statistical tests
             </p>
-            <p className="mt-1 text-sm text-[#666]">
-              {data.test}, {data.correction} across {data.tests.length}{" "}
-              populations, α = {data.alpha}.
-            </p>
           </div>
 
-          <table className="mt-4 w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-[#e5e0d9] text-left">
-                {[
-                  "population",
-                  "median (resp)",
-                  "median (non-resp)",
-                  "difference",
-                  "p",
-                  "q (BH)",
-                  "effect size",
-                  "significant",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="py-2 pr-4 last:pr-0 text-[10px] font-semibold uppercase tracking-widest text-[#999]"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.tests.map((test) => (
-                <tr
-                  key={test.population}
-                  className={test.significant ? "bg-[#fff8f5]" : undefined}
-                >
-                  <td className="py-1.5 pr-4 text-[#333]">{test.population}</td>
-                  <td className="py-1.5 pr-4 tabular-nums text-[#333]">
-                    {test.median_responders.toFixed(2)}%
-                  </td>
-                  <td className="py-1.5 pr-4 tabular-nums text-[#333]">
-                    {test.median_non_responders.toFixed(2)}%
-                  </td>
-                  <td className="py-1.5 pr-4 tabular-nums text-[#333]">
-                    {test.median_difference >= 0 ? "+" : ""}
-                    {test.median_difference.toFixed(2)}
-                  </td>
-                  <td className="py-1.5 pr-4 tabular-nums text-[#333]">
-                    {test.p_value.toFixed(4)}
-                  </td>
-                  <td className="py-1.5 pr-4 tabular-nums text-[#333]">
-                    {test.p_value_adjusted.toFixed(4)}
-                  </td>
-                  <td className="py-1.5 pr-4 tabular-nums text-[#333]">
-                    {test.effect_size.toFixed(3)}
-                  </td>
-                  <td className="py-1.5 text-[#333]">
-                    {test.significant ? "yes" : "no"}
-                  </td>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-[#e5e0d9] text-left">
+                  {[
+                    "population",
+                    "median (resp)",
+                    "median (non-resp)",
+                    "difference",
+                    "p",
+                    "q (BH-adjusted p)",
+                    "effect size",
+                    "significant",
+                    "SW p (resp)",
+                    "SW p (non-resp)",
+                    "normal?",
+                    "Welch p (if normal)",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="py-2 pr-4 last:pr-0 text-[10px] font-semibold uppercase tracking-widest text-[#999]"
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.tests.map((test) => (
+                  <tr
+                    key={test.population}
+                    className={test.significant ? "bg-[#fff8f5]" : undefined}
+                  >
+                    <td className="py-1.5 pr-4 whitespace-nowrap text-[#333]">
+                      {test.population}
+                    </td>
+                    <td className="py-1.5 pr-4 whitespace-nowrap tabular-nums text-[#333]">
+                      {test.median_responders.toFixed(2)}%
+                    </td>
+                    <td className="py-1.5 pr-4 whitespace-nowrap tabular-nums text-[#333]">
+                      {test.median_non_responders.toFixed(2)}%
+                    </td>
+                    <td className="py-1.5 pr-4 whitespace-nowrap tabular-nums text-[#333]">
+                      {test.median_difference >= 0 ? "+" : ""}
+                      {test.median_difference.toFixed(2)}
+                    </td>
+                    <td className="py-1.5 pr-4 whitespace-nowrap tabular-nums text-[#333]">
+                      {test.p_value.toFixed(4)}
+                    </td>
+                    <td className="py-1.5 pr-4 whitespace-nowrap tabular-nums text-[#333]">
+                      {test.p_value_adjusted.toFixed(4)}
+                    </td>
+                    <td className="py-1.5 pr-4 whitespace-nowrap tabular-nums text-[#333]">
+                      {test.effect_size.toFixed(3)}
+                    </td>
+                    <td className="py-1.5 pr-4 whitespace-nowrap text-[#333]">
+                      {test.significant ? "yes" : "no"}
+                    </td>
+                    <td className="py-1.5 pr-4 whitespace-nowrap tabular-nums text-[#333]">
+                      {fmtP(test.shapiro_p_responders)}
+                    </td>
+                    <td className="py-1.5 pr-4 whitespace-nowrap tabular-nums text-[#333]">
+                      {fmtP(test.shapiro_p_non_responders)}
+                    </td>
+                    <td
+                      className={`py-1.5 pr-4 whitespace-nowrap font-medium ${test.normality_rejected ? "text-[#e5341a]" : "text-[#333]"}`}
+                    >
+                      {test.normality_rejected
+                        ? "no → MWU ✓"
+                        : "yes → t-test ok"}
+                    </td>
+                    <td className="py-1.5 pr-4 whitespace-nowrap tabular-nums text-[#333]">
+                      {test.p_value_welch != null
+                        ? fmtP(test.p_value_welch)
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <p className="mt-4 text-sm text-[#555]">
-            {significant.length === 0 ? (
-              <>
-                No population shows a significant difference in relative
-                frequency between responders and non-responders (all
-                BH-adjusted q &gt;{" "}
-                {Math.min(
-                  ...data.tests.map((t) => t.p_value_adjusted),
-                ).toFixed(2)}
-                ). Effect sizes are negligible, so this is an absence of
-                signal rather than an underpowered test.
-              </>
-            ) : (
-              <>
-                Significant after correction:{" "}
-                {significant.map((t) => t.population).join(", ")}.
-              </>
-            )}
+            Methodology: A Mann-Whitney U test is used to determine whether
+            responder / non-responder distributions are significantly different,
+            without assuming that the distributions are normal (as would be
+            required for a standard t-test, alongside equal variance).
+            Benjamini-Hochberg false discovery rate correction is used to adjust
+            the MWU p-value with α=0.05, per convention. The MWU effect size is
+            calculated to provide magnitude context for the adjusted p-values.
+            Finally, the Shapiro-Wilk test is used on each group independently
+            to check whether the individual distributions are normal, in which
+            case a Welch t-test is provided as a secondary result (a t-test that
+            does not assume equal variances between distributions).
           </p>
         </FadeIn>
       )}

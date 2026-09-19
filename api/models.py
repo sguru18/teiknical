@@ -25,12 +25,12 @@ SampleType = Literal["PBMC", "WB"]
 Response = Literal["yes", "no"]
 Sex = Literal["M", "F"]
 
-# Each subject contributes three samples, so a comparison between responders and
-# non-responders has to say what it does with those repeated measures.
-#   baseline     - pre-treatment sample only; one row per subject
-#   subject_mean - average each subject across timepoints; one row per subject
-#   all_samples  - every sample, which overstates the sample size
-Aggregation = Literal["baseline", "subject_mean", "all_samples"]
+# Each subject contributes three samples (day 0, 7, 14). The comparison selects
+# one timepoint so every row is an independent observation (one subject = one point).
+#   baseline - pre-treatment (day 0); predicts who will respond before dosing
+#   day7     - one week on-treatment; shows early immune response to the drug
+#   day14    - two weeks on-treatment; shows whether the immune shift is sustained
+Aggregation = Literal["baseline", "day7", "day14"]
 
 
 class FilterOptions(BaseModel):
@@ -72,6 +72,18 @@ class SummaryResponse(BaseModel):
     populations: list[str]
 
 
+class SummaryRequest(BaseModel):
+    """POST body for fetching many sample ids at once.
+
+    Prefer this over repeating ?sample= on GET when the cohort is large —
+    hundreds of ids blow past typical URL length limits.
+    """
+
+    sample: list[str] = Field(default_factory=list)
+    limit: int | None = Field(default=None, ge=1)
+    offset: int = Field(default=0, ge=0)
+
+
 # --- Part 3: responder vs non-responder ---------------------------------------
 
 
@@ -108,11 +120,31 @@ class PopulationTest(BaseModel):
             "overlap almost entirely, regardless of the p-value."
         )
     )
-    p_value_welch: float = Field(
+    shapiro_p_responders: float = Field(
         description=(
-            "Welch's t-test p-value, reported as a sensitivity check. Agreement "
-            "with the rank-based test is evidence the conclusion does not depend "
-            "on which test was chosen."
+            "Shapiro-Wilk p-value for the responder group. "
+            "p < 0.05 means normality is rejected for that group."
+        )
+    )
+    shapiro_p_non_responders: float = Field(
+        description=(
+            "Shapiro-Wilk p-value for the non-responder group. "
+            "p < 0.05 means normality is rejected for that group."
+        )
+    )
+    normality_rejected: bool = Field(
+        description=(
+            "True if Shapiro-Wilk rejects normality (p < 0.05) in either group. "
+            "When true, MWU is the appropriate test over a t-test."
+        )
+    )
+    p_value_welch: float | None = Field(
+        default=None,
+        description=(
+            "Welch t-test p-value. Only computed when normality_rejected is False — "
+            "Welch requires normality but not equal variance, so it is the correct "
+            "parametric comparison for populations where Shapiro-Wilk does not reject. "
+            "None when normality is rejected."
         )
     )
 
