@@ -153,13 +153,17 @@ export async function prefetchDefaults(): Promise<void> {
   // Compare is the expensive endpoint (pandas + Shapiro-Wilk + Mann-Whitney).
   // Sequential — the backend is single-worker so parallel requests queue anyway
   // and the contention makes each one slower.
+  // Order: for each condition+treatment combo, warm all three timepoints before
+  // moving on, so switching timepoints after landing on a combo is always instant.
   void (async () => {
     for (const combo of PREFETCH_COMPARE_COMBOS) {
-      await cachedFetch<CompareResponse>("/api/compare", {
-        ...combo,
-        sample_type: DEFAULT_COMPARE_PARAMS.sample_type,
-        aggregation: DEFAULT_COMPARE_PARAMS.aggregation,
-      });
+      for (const aggregation of ["baseline", "day7", "day14"] as const) {
+        await cachedFetch<CompareResponse>("/api/compare", {
+          ...combo,
+          sample_type: DEFAULT_COMPARE_PARAMS.sample_type,
+          aggregation,
+        });
+      }
     }
   })();
 }
